@@ -31,7 +31,9 @@ cybershake_df["fault"] = np.stack(
 )[0, :]
 cybershake_df["historic"] = False
 
-small_df = pd.read_csv(Path(__file__).parent / "resources" / "val_small.csv", index_col=0)
+small_df = pd.read_csv(
+    Path(__file__).parent / "resources" / "val_small.csv", index_col=0
+)
 small_df["fault"] = small_df.index.values.astype(str)
 small_df["historic"] = True
 

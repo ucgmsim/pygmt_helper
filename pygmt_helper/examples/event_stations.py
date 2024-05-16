@@ -1,4 +1,5 @@
-""""Script for plotting sites and historic events"""
+"""Script for plotting sites and historic events"""
+
 from pathlib import Path
 
 import numpy as np

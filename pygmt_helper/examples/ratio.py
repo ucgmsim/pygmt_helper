@@ -48,6 +48,7 @@ plotting.plot_grid(
 
 # Save the figure
 fig.savefig(
-    output_dir / f"ratio.png", dpi=900, anti_alias=True,
+    output_dir / f"ratio.png",
+    dpi=900,
+    anti_alias=True,
 )
-
