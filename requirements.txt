@@ -1,0 +1,8 @@
+numpy
+pandas
+geopandas
+pygmt
+xarray
+scipy
+shapely
+git+https://github.com/ucgmsim/qcore.git
