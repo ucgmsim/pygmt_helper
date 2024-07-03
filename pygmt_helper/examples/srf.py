@@ -5,12 +5,11 @@ pygmt_helper package for visualising of an SRF file
 
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from pygmt_helper import plotting
 from qcore import srf
-
 
 map_data_ffp = Path("/path/to/qcore/qcore/data")
 output_dir = Path("/path/to/output_dir")
@@ -29,7 +28,7 @@ map_data = plotting.NZMapData.load(map_data_ffp, high_res_topo=False)
 
 # Compute colormap limits
 slip_all = np.concatenate([cur_values[:, 2] for cur_values in slip_values])
-slip_cb_max = int(np.round(np.quantile(slip_all, 0.98), -1))
+slip_cb_max = max(int(np.round(np.quantile(slip_all, 0.98), -1)), 10)
 cmap_limits = (0, slip_cb_max, slip_cb_max / 10)
 
 region = (
