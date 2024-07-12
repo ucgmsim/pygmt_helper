@@ -5,7 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pygmt_helper"
 version = "22.8.1"
-url="https://github.com/ucgmsim/pygmt_helper"
 authors = [{name = "QuakeCoRE"}]
 description = "PyGMT helper package"
 readme = "ReadMe.md"
