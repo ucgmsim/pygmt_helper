@@ -5,4 +5,4 @@ pygmt
 xarray
 scipy
 shapely
-qcore @ git+https://github.com/ucgmsim/qcore.git
+qcore @ git+https://github.com/ucgmsim/qcore.git@pegasus
