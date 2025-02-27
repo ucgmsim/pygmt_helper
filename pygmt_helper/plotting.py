@@ -88,7 +88,7 @@ def gen_region_fig(
         (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
         (min_lon, max_lon, min_lat, max_lat).
     projection : str
-        The map projection string. See PyGMT [0]_ or GMT documentation for details.
+        The map projection string. See the PyGMT documentation [0]_ for details.
     map_data : NZMapData, optional
         Custom map data object from qcore, used to plot additional geographical
         features.
@@ -121,14 +121,14 @@ def gen_region_fig(
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
     if title:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []).append(
+        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
             f"+t{title}".replace(" ", r"\040")
-        )
+        ]
 
     if subtitle:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []).append(
+        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
             f"+s{subtitle}".replace(" ", r"\040")
-        )
+        ]
 
     fig = pygmt.Figure()
 
