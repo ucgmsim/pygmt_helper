@@ -3,7 +3,7 @@
 import copy
 import tempfile
 from pathlib import Path
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, Self
 
 import geopandas
 import numpy as np
@@ -25,7 +25,21 @@ class NZMapData(NamedTuple):
     topo_shading_grid: xr.DataArray = None
 
     @classmethod
-    def load(cls, qcore_data_dir: Path, high_res_topo: bool = False):
+    def load(cls, qcore_data_dir: Path, high_res_topo: bool = False) -> Self:
+        """Load NZMapData from qcore resources.
+
+        Parameters
+        ----------
+        qcore_data_dir : Path
+            Path to qcore data directory.
+        high_res_topo : bool
+            If True, load high resolution topographic data.
+
+        Returns
+        -------
+        NZMapData
+            A map data object containing the paths to the map data.
+        """
         road_ffp = qcore_data_dir / "Paths/road/NZ.gmt"
         highway_ffp = qcore_data_dir / "Paths/highway/NZ.gmt"
         coastline_ffp = qcore_data_dir / "Paths/coastline/NZ.gmt"
@@ -66,7 +80,7 @@ DEFAULT_PLT_KWARGS = dict(
 def gen_region_fig(
     title: Optional[str] = None,
     region: str | tuple[float, float, float, float] = "NZ",
-    projection: str = f"M17.0c",
+    projection: str = "M17.0c",
     map_data: NZMapData = None,
     plot_roads: bool = True,
     plot_highways: bool = True,
@@ -166,7 +180,33 @@ def _draw_map_data(
     plot_roads: bool = True,
     plot_highways: bool = True,
     plot_kwargs: dict[str, str | int] = None,
-):
+) -> None:
+    """Draws map data on a PyGMT figure.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        The PyGMT figure to draw on.
+    map_data : Optional[NZMapData]
+        The map data containing coastline, topography, water, and road networks.
+    plot_topo : bool, optional
+        Whether to plot topographic data. Defaults to True.
+    plot_roads : bool, optional
+        Whether to plot roads. Defaults to True.
+    plot_highways : bool, optional
+        Whether to plot highways. Defaults to True.
+    plot_kwargs : dict[str, str | int], optional
+        A dictionary of plotting options, including:
+
+        - ``"coastline_pen_width"`` (str or int): Line width for coastline.
+        - ``"topo_cmap_min"`` (int): Minimum value for the topography colormap.
+        - ``"topo_cmap_max"`` (int): Maximum value for the topography colormap.
+        - ``"topo_cmap_inc"`` (int): Increment for the topography colormap.
+        - ``"topo_cmap"`` (str): Name of the colormap for topography.
+        - ``"topo_cmap_reverse"`` (bool): Whether to reverse the topography colormap.
+        - ``"road_pen_width"`` (str or int): Line width for roads.
+        - ``"highway_pen_width"`` (str or int): Line width for highways.
+    """
     # Plot coastline and background water
     water_bg = geopandas.GeoSeries(
         geometry.LineString(
@@ -355,6 +395,8 @@ def create_grid(
         Unstructured data to be gridded. The DataFrame must contain the following
         columns: `lon` (longitude), `lat` (latitude), and a data value column
         (referred to as `data_key`).
+    data_key : str
+        The column name in `data_df` containing the data values.
     grid_spacing : str
         Grid spacing specification, using GMT gridding conventions.
         See the spacing parameter of `pygmt.grdlandmask` or the Notes section.
@@ -362,6 +404,10 @@ def create_grid(
         The region to plot. If a string, it should correspond to a predefined region
         (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
         (min_lon, max_lon, min_lat, max_lat).
+    interp_method : str
+        The interpolation method to apply between points in `data_df`. Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
+    set_water_to_nan : bool
+        If True, set water values in the grid to NaN.
 
     Returns
     -------
