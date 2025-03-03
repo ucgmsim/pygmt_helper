@@ -1,4 +1,5 @@
 """Plotting functions for generating IM (Intensity Measure) maps and fault trace plots."""
+
 import multiprocessing as mp
 from collections.abc import Sequence
 from importlib import reload
@@ -7,6 +8,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+import pygmt
 from qcore import nhm
 
 from . import plotting
@@ -319,6 +321,7 @@ def im_plots(
                             for cur_rel in np.unique(data_df.rel)
                         ],
                     )
+
 
 def __gen_im_map(
     data_df: pd.DataFrame,
