@@ -8,7 +8,7 @@ version = "22.8.1"
 authors = [{name = "QuakeCoRE"}]
 description = "PyGMT helper package"
 readme = "ReadMe.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
