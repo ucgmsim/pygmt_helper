@@ -212,7 +212,7 @@ def im_plots(
     output_dir: Path,
     rel_name: Optional[str] = None,
     nhm_ffp: Optional[Path] = None,
-    qcore_data_dir: Optional[Path] = None,
+    use_map_data: Optional[NZMapData] = None,
     cb_limits_dict: Optional[dict[str, tuple[float, float]]] = None,
     n_procs: int = 1,
 ) -> None:
@@ -233,8 +233,8 @@ def im_plots(
         If provided, the function will generate plots for a specific realization (run) identified by this name.
     nhm_ffp : Path, optional
         Path to the NHM file, which can provide fault trace information.
-    qcore_data_dir : Path, optional
-        Path to the directory containing QCore data used for NZ map generation.
+    nz_map_data: Optional[NZMapData], default=None
+        The NZMapData object to supply topographic data.
     cb_limits_dict : dict, optional
         A dictionary specifying the color bar limits for each intensity measure (IM). If None, limits will be automatically computed.
     n_procs : int, optional
@@ -245,9 +245,6 @@ def im_plots(
     None
         This function saves the generated plots to the specified output directory and does not return any values.
     """
-    nz_map_data = (
-        None if qcore_data_dir is None else plotting.NZMapData.load(qcore_data_dir)
-    )
 
     # Load the trace if possible
     fault_trace = (

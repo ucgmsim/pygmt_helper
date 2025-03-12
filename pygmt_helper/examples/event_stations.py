@@ -66,11 +66,7 @@ event_df = event_df.loc[event_df.mag > min_mag]
 
 
 # Load map data
-map_data = (
-    None
-    if map_data_ffp is None
-    else plotting.NZMapData.load(map_data_ffp, high_res_topo=use_high_res_topo)
-)
+map_data = plotting.NZMapData.load(high_res_topo=use_high_res_topo)
 
 # Generate the figure
 fig = plotting.gen_region_fig(

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pygmt
 import xarray as xr
+from qcore import gmt
 from scipy import interpolate
 from shapely import geometry
 
@@ -25,13 +26,11 @@ class NZMapData(NamedTuple):
     topo_shading_grid: xr.DataArray = None
 
     @classmethod
-    def load(cls, qcore_data_dir: Path, high_res_topo: bool = False) -> Self:
+    def load(cls, high_res_topo: bool = False) -> Self:
         """Load NZMapData from qcore resources.
 
         Parameters
         ----------
-        qcore_data_dir : Path
-            Path to qcore data directory.
         high_res_topo : bool
             If True, load high resolution topographic data.
 
@@ -40,17 +39,17 @@ class NZMapData(NamedTuple):
         NZMapData
             A map data object containing the paths to the map data.
         """
-        road_ffp = qcore_data_dir / "Paths/road/NZ.gmt"
-        highway_ffp = qcore_data_dir / "Paths/highway/NZ.gmt"
-        coastline_ffp = qcore_data_dir / "Paths/coastline/NZ.gmt"
-        water_ffp = qcore_data_dir / "Paths/water/NZ.gmt"
+        road_ffp = gmt.GMT_DATA.fetch("Paths/road/NZ.gmt")
+        highway_ffp = gmt.GMT_DATA.fetch("Paths/highway/NZ.gmt")
+        coastline_ffp = gmt.GMT_DATA.fetch("Paths/coastline/NZ.gmt")
+        water_ffp = gmt.GMT_DATA.fetch("Paths/water/NZ.gmt")
 
         if high_res_topo:
-            topo_ffp = qcore_data_dir / "Topo/srtm_NZ_1s.grd"
-            topo_shading_ffp = qcore_data_dir / "Topo/srtm_NZ_1s_i5.grd"
+            topo_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_1s.grd")
+            topo_shading_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_1s_i5.grd")
         else:
-            topo_ffp = qcore_data_dir / "Topo/srtm_NZ.grd"
-            topo_shading_ffp = qcore_data_dir / "Topo/srtm_NZ_i5.grd"
+            topo_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ.grd")
+            topo_shading_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_i5.grd")
 
         return cls(
             road_df=geopandas.read_file(road_ffp),

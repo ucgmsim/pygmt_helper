@@ -1,11 +1,10 @@
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 from qcore import nhm
-from pygmt_helper import plots
-from pygmt_helper import plotting
+
+from pygmt_helper import plots, plotting
 
 # Config
 nhm_ffp = Path("path to nhm file")
@@ -20,7 +19,7 @@ show_hypo = False
 nhm_data = nhm.load_nhm(str(nhm_ffp))
 
 # Load plotting data
-map_data = plotting.NZMapData.load(map_data_ffp)
+map_data = plotting.NZMapData.load()
 
 # Load the source information
 cybershake_df = pd.read_csv(
