@@ -8,8 +8,36 @@ version = "22.8.1"
 authors = [{name = "QuakeCoRE"}]
 description = "PyGMT helper package"
 readme = "ReadMe.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
+
+[tool.ruff]
+extend-exclude = ['pygmt_helper/examples/']
+
+[tool.numpydoc_validation]
+checks = [
+  "GL05",
+  "GL08",
+  "GL10",
+  "PR01",
+  "PR02",
+  "PR03",
+  "PR04",
+  "PR05",
+  "PR06",
+  "PR07",
+  "RT01",
+  "RT02",
+  "RT03",
+  "RT04",
+  "YD01",
+]
+# remember to use single quotes for regex in TOML
+exclude = [  # don't report on objects that match any of these regex
+    '\.undocumented_method$',
+    '\.__repr__$',
+]

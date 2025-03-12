@@ -1,18 +1,22 @@
-import copy
-import pandas as pd
-from pathlib import Path
-import tempfile
-from typing import Tuple, Union, NamedTuple, Dict, Any
+"""Plotting tools to generate basemaps, grids and contours with PyGMT."""
 
-import pygmt
+import copy
+import tempfile
+from pathlib import Path
+from typing import Any, NamedTuple, Optional, Self
+
 import geopandas
-import xarray as xr
 import numpy as np
+import pandas as pd
+import pygmt
+import xarray as xr
 from scipy import interpolate
 from shapely import geometry
 
 
 class NZMapData(NamedTuple):
+    """New Zealand map data configuration."""
+
     road_df: pd.DataFrame = None
     highway_df: geopandas.GeoDataFrame = None
     coastline_df: geopandas.GeoDataFrame = None
@@ -21,7 +25,21 @@ class NZMapData(NamedTuple):
     topo_shading_grid: xr.DataArray = None
 
     @classmethod
-    def load(cls, qcore_data_dir: Path, high_res_topo: bool = False):
+    def load(cls, qcore_data_dir: Path, high_res_topo: bool = False) -> Self:
+        """Load NZMapData from qcore resources.
+
+        Parameters
+        ----------
+        qcore_data_dir : Path
+            Path to qcore data directory.
+        high_res_topo : bool
+            If True, load high resolution topographic data.
+
+        Returns
+        -------
+        NZMapData
+            A map data object containing the paths to the map data.
+        """
         road_ffp = qcore_data_dir / "Paths/road/NZ.gmt"
         highway_ffp = qcore_data_dir / "Paths/highway/NZ.gmt"
         coastline_ffp = qcore_data_dir / "Paths/coastline/NZ.gmt"
@@ -60,66 +78,75 @@ DEFAULT_PLT_KWARGS = dict(
 
 
 def gen_region_fig(
-    title: str = None,
-    region: Union[str, Tuple[float, float, float, float]] = "NZ",
-    projection: str = f"M17.0c",
+    title: Optional[str] = None,
+    region: str | tuple[float, float, float, float] = "NZ",
+    projection: str = "M17.0c",
     map_data: NZMapData = None,
     plot_roads: bool = True,
     plot_highways: bool = True,
     plot_topo: bool = True,
-    plot_kwargs: Dict[str, Any] = None,
-    config_options: Dict[str, Union[str, int]] = None,
+    plot_kwargs: dict[str, Any] = None,
+    config_options: dict[str, str | int] = None,
+    subtitle: Optional[str] = None,
 ):
     """
-    Creates a basic figure for the specified region
-    and plots the coastline (and roads & topo if specified)
+    Generates a basic map figure for a specified region, including coastlines,
+    roads, highways, and topography if specified.
 
     Parameters
     ----------
-    title: str, optional
-        Title of the figure
-    region: str or Tuple of 4 floats
-        Region to plot, either a string or
-        a tuple of 4 floats in the format
-        (min_lon, max_lon, min_lat, max_lat)
-    projection: str
-        Projection string, see pygmt or gmt
-        documentation for this
-    map_data: NZMapData
-        Custom map data from qcore
-    plot_roads: bool, optional
-    plot_highways: bool, optional
-    plot_topo: bool, optional
-    plot_kwargs: dictionary
-        Extra plotting arguments, see DEFAULT_PLT_KWARGS
-        for available options
-
-        Note: Only need to specify the ones to override
-    config_options: dictionary
-        Config options to be applied to the figure
-        See https://docs.generic-mapping-tools.org/latest/gmt.conf.html
-        for list of availbale config options
+    title : str, optional
+        Title of the figure.
+    region : str or tuple of float
+        The region to plot. If a string, it should correspond to a predefined region
+        (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
+        (min_lon, max_lon, min_lat, max_lat).
+    projection : str
+        The map projection string. See the PyGMT documentation [0]_ for details.
+    map_data : NZMapData, optional
+        Custom map data object from qcore, used to plot additional geographical
+        features.
+    plot_roads : bool, optional, default=True
+        If True, plot roads on the map.
+    plot_highways : bool, optional, default=True
+        If True, plot highways on the map.
+    plot_topo : bool, optional, default=True
+        If True, plot topography on the map.
+    plot_kwargs : dict, optional
+        Additional plotting arguments, overriding values in `DEFAULT_PLT_KWARGS`.
+        Only specify the options to be overridden.
+    config_options : dict, optional
+        Configuration options to apply to the figure. See the GMT configuration
+        documentation [1]_ for available options.
+    subtitle : str, optional
+        Subtitle of the figure.
 
     Returns
     -------
-    fig: Figure
+    pygmt.Figure
+        A PyGMT figure object representing the generated map.
+
+    References
+    ----------
+    .. [0] https://www.pygmt.org/latest/projections/index.html#projections
+    .. [1] https://docs.generic-mapping-tools.org/latest/gmt.conf.html
     """
     # Merge with default
-    plot_kwargs = (
-        copy.deepcopy(DEFAULT_PLT_KWARGS)
-        if plot_kwargs is None
-        else {**DEFAULT_PLT_KWARGS, **plot_kwargs}
-    )
+    plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
-    if title is not None:
-        if plot_kwargs["frame_args"] is None:
-            plot_kwargs["frame_args"] = [f'+t"{title}"']
-        else:
-            plot_kwargs["frame_args"].append(f'+t"{title}"')
+    if title:
+        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
+            f"+t{title}".replace(" ", r"\040")
+        ]
+
+    if subtitle:
+        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
+            f"+s{subtitle}".replace(" ", r"\040")
+        ]
 
     fig = pygmt.Figure()
 
-    if config_options is not None:
+    if config_options:
         pygmt.config(**config_options)
 
     fig.basemap(region=region, projection=projection, frame=plot_kwargs["frame_args"])
@@ -148,12 +175,38 @@ def gen_region_fig(
 
 def _draw_map_data(
     fig: pygmt.Figure,
-    map_data: Union[NZMapData, None],
+    map_data: Optional[NZMapData],
     plot_topo: bool = True,
     plot_roads: bool = True,
     plot_highways: bool = True,
-    plot_kwargs: Dict[str, Union[str, int]] = None,
-):
+    plot_kwargs: dict[str, str | int] = None,
+) -> None:
+    """Draws map data on a PyGMT figure.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        The PyGMT figure to draw on.
+    map_data : Optional[NZMapData]
+        The map data containing coastline, topography, water, and road networks.
+    plot_topo : bool, optional
+        Whether to plot topographic data. Defaults to True.
+    plot_roads : bool, optional
+        Whether to plot roads. Defaults to True.
+    plot_highways : bool, optional
+        Whether to plot highways. Defaults to True.
+    plot_kwargs : dict[str, str | int], optional
+        A dictionary of plotting options, including:
+
+        - ``"coastline_pen_width"`` (str or int): Line width for coastline.
+        - ``"topo_cmap_min"`` (int): Minimum value for the topography colormap.
+        - ``"topo_cmap_max"`` (int): Maximum value for the topography colormap.
+        - ``"topo_cmap_inc"`` (int): Increment for the topography colormap.
+        - ``"topo_cmap"`` (str): Name of the colormap for topography.
+        - ``"topo_cmap_reverse"`` (bool): Whether to reverse the topography colormap.
+        - ``"road_pen_width"`` (str or int): Line width for roads.
+        - ``"highway_pen_width"`` (str or int): Line width for highways.
+    """
     # Plot coastline and background water
     water_bg = geopandas.GeoSeries(
         geometry.LineString(
@@ -208,8 +261,8 @@ def plot_grid(
     fig: pygmt.Figure,
     grid: xr.DataArray,
     cmap: str,
-    cmap_limits: Tuple[float, float, float],
-    cmap_limit_colors: Tuple[str, str],
+    cmap_limits: tuple[float, float, float],
+    cmap_limit_colors: tuple[str, str],
     cb_label: str = None,
     reverse_cmap: bool = False,
     log_cmap: bool = False,
@@ -217,42 +270,52 @@ def plot_grid(
     plot_contours: bool = True,
     continuous_cmap: bool = False,
 ):
-    """
-    Plots the given grid as a colourmap & contours
-    Also adds a colour bar
+    """Plots a data grid as a color map with optional contours and a color bar.
 
     Parameters
     ----------
-    fig: Figure
-    grid: DataArray
-        The data grid to plot
-        Has to have the coordinates lat & lon (in that order),
-        along with a data value
-    cmap: string
-        The "master" colourmap to use (see gmt documentation)
-        https://docs.generic-mapping-tools.org/6.2/cookbook/cpts.html
-    cmap_limits: triplet of floats
-        The min, max & step value for colour map
-        Number of colours is therefore given by
-        (cpt_limits[1] - cpt_limits[0]) / cpt_step
-    cmap_limit_colors: pair of strings
-        The colours to use for regions that are
-        outside the specified colourmap limits
-    reverse_cmap: bool, optional
-        Reverses the order of the colours
-    log_cmap: bool, optional
-        Create a log10 based colourmap
-        Expects the cmap_limits to be log10(z)
-    transparency: float, optional
-        Controls the level of transparency (0-100)
-    plot_contours: bool, optional
-        Enable/Disable contours
-        A contour line is plotted for every
-        2nd colour step
-    continuous_cmap: bool, optional
-        If specified, a continuous colormap is used
-        See https://www.pygmt.org/latest/api/generated/pygmt.makecpt.html
-        for details
+    fig : pygmt.Figure
+        The PyGMT figure object to plot on.
+    grid : xr.DataArray
+        The data grid to be plotted. The grid must have latitude and
+        longitude coordinates (in that order) along with associated
+        data values.
+    cmap : str
+        The name of the master colormap to use. See GMT documentation
+        for available colormaps [0]_.
+    cmap_limits : tuple of (float, float, float)
+        The minimum, maximum, and step values for the colormap. The
+        number of colors is determined by:
+        ```
+        (cmap_limits[1] - cmap_limits[0]) / cmap_limits[2]
+        ```
+    cmap_limit_colors : tuple of (str, str)
+        Colors to use for data values outside the specified colormap
+        range. The first color is for values below the minimum, and
+        the second is for values above the maximum.
+    cb_label : str, optional
+        Label for the color bar.
+    reverse_cmap : bool, optional, default=False
+        If True, reverses the colormap.
+    log_cmap : bool, optional, default=False
+        If True, applies a logarithmic (base-10) scale to the colormap.
+        Expects `cmap_limits` to be in log10 scale.
+    transparency : float, optional, default=0.0
+        Transparency level of the color map (0-100).
+    plot_contours : bool, optional, default=True
+        If True, adds contour lines at every second colormap step.
+    continuous_cmap : bool, optional, default=False
+        If True, generates a continuous colormap instead of a discrete
+        one. See `pygmt.makecpt`.
+
+    Returns
+    -------
+    None
+        The function modifies the provided PyGMT figure in place.
+
+    References
+    ----------
+    .. [0] https://docs.generic-mapping-tools.org/latest/cookbook/cpts.html.
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_dir = Path(tmp_dir)
@@ -320,36 +383,46 @@ def create_grid(
     data_df: pd.DataFrame,
     data_key: str,
     grid_spacing: str = "200e/200e",
-    region: Union[str, Tuple[float, float, float, float]] = "NZ",
+    region: str | tuple[float, float, float, float] = "NZ",
     interp_method: str = "linear",
     set_water_to_nan: bool = True,
 ):
-    """
-    Creates a regular grid from the available unstructured data
+    """Generates a regular grid from unstructured data.
 
     Parameters
     ----------
-    data_df: DataFrame
-        Unstructured data to be gridded
-
-        Expected to have columns, [lon, lat] and data_key
-    grid_spacing: string
-        Grid spacing to use, uses gmt griding
-        functionality, see "spacing" in
-        (https://www.pygmt.org/latest/api/generated/pygmt.grdlandmask.html)
-
-        Short summary of most relevant usage:
-        For gridline every x (unit), use "{x}{unit}/{x}{unit}",
-            where unit is one of metres (e), kilometres (k)
-        To use a specific number of gridlines use "{x}+n/{x}+n",
-            where x is the number of gridlines
-    region: str or quadruplet of floats
-        Region name or (xmin/xmax/ymin/ymax)
+    data_df : pandas.DataFrame
+        Unstructured data to be gridded. The DataFrame must contain the following
+        columns: `lon` (longitude), `lat` (latitude), and a data value column
+        (referred to as `data_key`).
+    data_key : str
+        The column name in `data_df` containing the data values.
+    grid_spacing : str
+        Grid spacing specification, using GMT gridding conventions.
+        See the spacing parameter of `pygmt.grdlandmask` or the Notes section.
+    region : str or tuple of (float, float, float, float)
+        The region to plot. If a string, it should correspond to a predefined region
+        (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
+        (min_lon, max_lon, min_lat, max_lat).
+    interp_method : str
+        The interpolation method to apply between points in `data_df`. Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
+    set_water_to_nan : bool
+        If True, set water values in the grid to NaN.
 
     Returns
     -------
-    grid: DataArray
+    xarray.DataArray
+        A gridded representation of the input data.
+
+    Notes
+    -----
+    Common grid spacing formats:
+    - To specify grid spacing of `x` units: `"{x}{unit}/{x}{unit}"`,
+      where `unit` can be metres (`e`) or kilometres (`k`).
+    - To define a fixed number of gridlines: `"{x}+n/{x}+n"`,
+      where `x` is the number of gridlines.
     """
+
     # Create the land/water mask
     land_mask = pygmt.grdlandmask(
         region=region, spacing=grid_spacing, maskvalues=[0, 1, 1, 1, 1], resolution="f"
