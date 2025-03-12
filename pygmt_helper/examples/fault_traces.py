@@ -8,7 +8,6 @@ from pygmt_helper import plots, plotting
 
 # Config
 nhm_ffp = Path("path to nhm file")
-map_data_ffp = Path("path to qcore/qcore/data")
 output_dir = Path("path to the output directory")
 
 # If true, then for each CS fault

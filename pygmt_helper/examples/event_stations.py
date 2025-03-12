@@ -22,11 +22,6 @@ region = [171.54, 173.12, -43.95, -43.22]
 inset_region = [172.60, 172.69, -43.545, -43.495]
 # Output file name
 output_ffp = Path("path to the output file")
-# Path to the map data
-# Is part of the qcore package, once installed it
-# can be found under qcore/qcore/data
-# Set to None for lower quality map, but much faster plotting time
-map_data_ffp = None
 # If true, then use the high resolution topography
 # This will further increase plot time, and only has an
 # effect if map_data_ffp is set

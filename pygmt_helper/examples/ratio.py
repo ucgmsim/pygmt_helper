@@ -10,8 +10,6 @@ from pygmt_helper import plotting
 site_ffp = Path(__file__).parent / "resources"
 
 # Config
-# map_data_ffp = Path("path to qcore/qcore/data")
-map_data_ffp = Path("/Users/claudy/dev/work/code/qcore/qcore/data")
 site_locations = (
     Path(__file__).parent
     / "resources"

@@ -11,7 +11,6 @@ from qcore import srf
 
 from pygmt_helper import plotting
 
-map_data_ffp = Path("/path/to/qcore/qcore/data")
 output_dir = Path("/path/to/output_dir")
 
 srf_ffp = Path(__file__).parent / "resources" / "Akatarawa.srf"
