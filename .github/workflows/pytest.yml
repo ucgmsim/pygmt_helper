@@ -29,7 +29,7 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest --cov=source_modelling --cov-report=html tests
+          pytest --cov=pygmt_helper --cov-report=html tests
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
