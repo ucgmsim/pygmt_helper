@@ -7,7 +7,7 @@ from pygmt_helper.plotting import (
     create_grid,
     gen_region_fig,
     plot_grid,
-)  # Replace your_module with the actual module name
+)  
 
 
 def test_gen_region_fig_custom_region():
