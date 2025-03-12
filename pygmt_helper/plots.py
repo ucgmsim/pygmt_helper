@@ -212,7 +212,7 @@ def im_plots(
     output_dir: Path,
     rel_name: Optional[str] = None,
     nhm_ffp: Optional[Path] = None,
-    use_map_data: Optional[NZMapData] = None,
+    nz_map_data: Optional[plotting.NZMapData] = None,
     cb_limits_dict: Optional[dict[str, tuple[float, float]]] = None,
     n_procs: int = 1,
 ) -> None:
