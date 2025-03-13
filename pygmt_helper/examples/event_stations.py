@@ -22,9 +22,11 @@ region = [171.54, 173.12, -43.95, -43.22]
 inset_region = [172.60, 172.69, -43.545, -43.495]
 # Output file name
 output_ffp = Path("path to the output file")
+# If true, then use New Zealand specific map data
+use_map_data = True
 # If true, then use the high resolution topography
 # This will further increase plot time, and only has an
-# effect if map_data_ffp is set
+# effect if use_map_data is set
 use_high_res_topo = True
 # List of events to highlight
 events_to_highlight = None
@@ -61,7 +63,7 @@ event_df = event_df.loc[event_df.mag > min_mag]
 
 
 # Load map data
-map_data = plotting.NZMapData.load(high_res_topo=use_high_res_topo)
+map_data = plotting.NZMapData.load(high_res_topo=use_high_res_topo) if use_map_data else None
 
 # Generate the figure
 fig = plotting.gen_region_fig(
