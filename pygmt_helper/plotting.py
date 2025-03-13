@@ -371,7 +371,7 @@ def plot_grid(
         phase = f"+{cmap_limits[0]}" if cmap_limits[0] > 0 else f"+{cmap_limits[1]}"
         cb_frame = [f"a+{cmap_limits[2] * 2}{phase}f+{cmap_limits[2]}"]
         if cb_label is not None:
-            cb_frame.append(f'x+l"{cb_label}"')
+            cb_frame.append(f"x+l{cb_label.replace(' ', r'\040')}")
         fig.colorbar(
             cmap=cpt_ffp,
             frame=cb_frame,
