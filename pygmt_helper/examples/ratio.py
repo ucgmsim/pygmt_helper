@@ -2,16 +2,14 @@
 
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from pygmt_helper import plotting
 
 site_ffp = Path(__file__).parent / "resources"
 
 # Config
-# map_data_ffp = Path("path to qcore/qcore/data")
-map_data_ffp = Path("/Users/claudy/dev/work/code/qcore/qcore/data")
 site_locations = (
     Path(__file__).parent
     / "resources"
@@ -30,7 +28,7 @@ df = pd.read_csv(
 )
 
 # Load plotting data
-map_data = plotting.NZMapData.load(map_data_ffp)
+map_data = plotting.NZMapData.load()
 
 # Add some fake data
 df["ratio"] = np.random.uniform(-0.5, 0.5, df.shape[0])
