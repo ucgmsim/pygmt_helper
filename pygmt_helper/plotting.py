@@ -39,17 +39,17 @@ class NZMapData(NamedTuple):
         NZMapData
             A map data object containing the paths to the map data.
         """
-        road_ffp = gmt.GMT_DATA.fetch("Paths/road/NZ.gmt")
-        highway_ffp = gmt.GMT_DATA.fetch("Paths/highway/NZ.gmt")
-        coastline_ffp = gmt.GMT_DATA.fetch("Paths/coastline/NZ.gmt")
-        water_ffp = gmt.GMT_DATA.fetch("Paths/water/NZ.gmt")
+        road_ffp = gmt.GMT_DATA.fetch("data/Paths/road/NZ.gmt")
+        highway_ffp = gmt.GMT_DATA.fetch("data/Paths/highway/NZ.gmt")
+        coastline_ffp = gmt.GMT_DATA.fetch("data/Paths/coastline/NZ.gmt")
+        water_ffp = gmt.GMT_DATA.fetch("data/Paths/water/NZ.gmt")
 
         if high_res_topo:
-            topo_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_1s.grd")
-            topo_shading_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_1s_i5.grd")
+            topo_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_1s.grd")
+            topo_shading_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_1s_i5.grd")
         else:
-            topo_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ.grd")
-            topo_shading_ffp = gmt.GMT_DATA.fetch("Topo/srtm_NZ_i5.grd")
+            topo_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ.grd")
+            topo_shading_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_i5.grd")
 
         return cls(
             road_df=geopandas.read_file(road_ffp),
