@@ -1,15 +1,13 @@
 from pathlib import Path
 
-import pygmt
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pygmt
 
 from pygmt_helper import plotting
 
-
 # Config
 ds_ffp = Path(__file__).parent / "resources" / "NZ_DSmodel_2015.txt"
-map_data_ffp = Path("path to qcore/qcore/data")
 output_dir = Path("path to the output directory")
 
 
@@ -26,7 +24,7 @@ ds_df["lat"] = split_ids[:, 0]
 ds_df["lon"] = split_ids[:, 1]
 
 # Plotting data
-map_data = plotting.NZMapData.load(map_data_ffp) if map_data_ffp is not None else None
+map_data = plotting.NZMapData.load()
 
 if incl_rec_prob:
     sum_df = (

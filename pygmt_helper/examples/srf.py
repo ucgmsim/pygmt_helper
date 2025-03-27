@@ -7,11 +7,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-from pygmt_helper import plotting
 from qcore import srf
 
-map_data_ffp = Path("/path/to/qcore/qcore/data")
+from pygmt_helper import plotting
+
 output_dir = Path("/path/to/output_dir")
 
 srf_ffp = Path(__file__).parent / "resources" / "Akatarawa.srf"
@@ -23,7 +22,7 @@ corners = np.transpose(np.array(corners), (1, 2, 0))
 slip_values = srf.srf2llv_py(str(srf_ffp), value="slip")
 
 # Set map_data to None for faster plotting without topography
-map_data = plotting.NZMapData.load(map_data_ffp, high_res_topo=False)
+map_data = plotting.NZMapData.load(high_res_topo=False)
 # map_data = None
 
 # Compute colormap limits
