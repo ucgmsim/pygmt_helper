@@ -120,7 +120,13 @@ def gen_region_fig(
         Configuration options to apply to the figure. See the GMT configuration
         documentation [1]_ for available options.
     coast_options : dict, optional
-        Additional options for the coastlines. See `pygmt.Figure.coast` for details.
+        Additional options for the coastlines. If not provided and `map_data` is None,
+        the following defaults are used:
+            - "resolution": "f" (full resolution)
+            - "land": "#666666" (dark gray land color)
+            - "water": "skyblue" (light blue water color)
+            - "shorelines": ["1/0.1p,black", "2/0.1p,black"] (shoreline styles)
+        See `pygmt.Figure.coast` for additional details.
     subtitle : str, optional
         Subtitle of the figure.
 
