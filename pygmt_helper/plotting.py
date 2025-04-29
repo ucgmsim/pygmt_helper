@@ -5,14 +5,81 @@ import tempfile
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Self
 
+import pooch
 import geopandas
 import numpy as np
 import pandas as pd
 import pygmt
 import xarray as xr
-from qcore import gmt
 from scipy import interpolate
 from shapely import geometry
+
+GMT_DATA = pooch.create(
+    pooch.os_cache("pygmt_helper"),
+    base_url="",
+    registry={
+        "data/Paths/water/NZ.gmt": "sha256:9abdd22ee120ce50613d3745825caeac5fc6f9ccec3bc80a4bc33d6de6cbd218",
+        "data/Topo/srtm_KR.grd": "sha256:cc59be8e9ee8cabb75587c040fd67597eb02116e225eeae89949e6f924058325",
+        "data/Topo/srtm_NZ.grd": "sha256:adb3eb43cd20be468b15cba52f8953538bf7523361f1f2d7b68dbf74113cc06c",
+        "data/Paths/water/KR.gmt": "sha256:9950b917d3f4e239e908f93f65705424082ae55f072d6a7926bb56298c2f5b28",
+        "data/Topo/srtm_KR_i5.grd": "sha256:adbacea622607b91438fee68999ebc7c8dd9eb35b3230708a9a5a21fc0de472b",
+        "data/regions.ll": "sha256:17ad7202395af54dea08f93f0b9ed8438fcb05834bc12242fa4fb770395ba899",
+        "data/Paths/coastline/NZ.gmt": "sha256:31660def8f51d6d827008e6f20507153cfbbfbca232cd661da7f214aff1c9ce3",
+        "data/Paths/highway/NZ.gmt": "sha256:fd03908ecd137fa0bd20184081d7b499d23bc44e4154dad388b3ba8c89893e62",
+        "data/version": "sha256:44804414f85bef9588f60086587fd6e8871b39123c831ec129624f4d81a95fea",
+        "data/cpt/nz_topo_grey1.cpt": "sha256:39305ac0739757337241a602a2dca71d0981a9fcc0e3240388b078669f1b3f84",
+        "data/cpt/hot-orange-log.cpt": "sha256:c56a2b43690468753489ff56817197ef7faab456a979c2dd9bb6bab80947dc14",
+        "data/cpt/slip.cpt": "sha256:e243f96aad43ea58fb0a1ed4c566d1e5d587abaf286a367dcd2be60a395dfc28",
+        "data/Paths/highway/KR.gmt": "sha256:bf2cbc7efd7e6fb8d3265ed421eda61fbe768fc6ddc5ed0f5c8f06ece023f909",
+        "data/cpt/hot-orange.cpt": "sha256:dace12cae5d803a4842af83e1ebee151cd797fede9238e1860574423a3aa7838",
+        "data/cpt/liquefaction_susceptibility.cpt": "sha256:29fb2b4e0fca678d5c28ad49d34411a0c411257b0843c94fc27ad23bfe4030cf",
+        "data/cpt/palm_springs_nz_topo.cpt": "sha256:8bb174d0fb86ea0181e8216cb75c04128aec29121aa1eae6a65344c4c84884b1",
+        "data/cpt/mmi.cpt": "sha256:4607b77a230b2ff33f8ff700ddd502df1c4c3604af01c64215d699e81bea5590",
+        "data/cpt/trise.cpt": "sha256:3711884ab8a216f102a1f60cdc4cfbb1aca3f3ab54fb08f1ae768eda77b88047",
+        "data/cpt/landslide_susceptibility.cpt": "sha256:1dbf19be72e42181da0f60d8a081c97a29da64b1473ae10f011061532dad218f",
+        "data/cpt/landslide_susceptibility_nolabel.cpt": "sha256:936d8f7cebb34e91ceff2f02a8a14923db280367020a879f9861584703f63e64",
+        "data/cpt/mmi-labels.cpt": "sha256:9b93ccfa22a3719eae931423a0fe67fa91dbbcfda008b792d136ecf07f0deffe",
+        "data/cpt/palm_springs_1.cpt": "sha256:487694eecd04dbc90619a3fa156a971c000efe364d4bd9d808ef5cde00c7e773",
+        "data/cpt/liquefaction_susceptibility_nolabel.cpt": "sha256:e0850f6c0a0614b95d77e0df195574fdff3f68e9c1f9c84642f8985a9cba92ca",
+        "data/img/logo-right.png": "sha256:849b332b7d234a3508cf5393555d3d526097df2dcabd35df50055ac0022dbb4d",
+        "data/img/logo-left.png": "sha256:e254ee4ca2c628e673b6ce04bd1f479d707493aab036e9a012c05f94b999ffdd",
+        "data/Paths/road/KR.gmt": "sha256:99a3d6f0da95698c38dfa40e509f125f2713633612ceb2a52cf7286fa2c68358",
+        "data/Paths/road/NZ.gmt": "sha256:e01f2ac2fc4a406e1d430c2cffb2d3ef10e260b10148fd9dc92723888cc24a68",
+        "data/Topo/srtm_NZ_i5.grd": "sha256:a2bd8c148015933b845a9760559457bd42b937fdd34ecb2d72a44f25e691cae4",
+        "data/Topo/srtm_NZ_1s.grd": "sha256:1caecfefda5bf7906593dacc76eeb91123b1768d50b6fe4e3b8ee90a1a3bcdc6",
+        "data/Topo/srtm_NZ_1s_i5.grd": "sha256:9a87328e680608542b49f719d230fb92c4a6a3b110720df50c2a6ad3b6c0547f",
+    },
+    # Now specify custom URLs for some of the files in the registry.
+    urls={
+        "data/Paths/coastline/NZ.gmt": "https://www.dropbox.com/scl/fi/zkohh794y0s2189t7b1hi/NZ.gmt?rlkey=02011f4morc4toutt9nzojrw1&st=vpz2ri8x&dl=1",
+        "data/Paths/water/NZ.gmt": "https://www.dropbox.com/scl/fi/ik101lnpkn3nn6z01ckcw/NZ.gmt?rlkey=byghec0ktpj00ctgau6704rl7&st=ng70q2fz&dl=1",
+        "data/Paths/water/KR.gmt": "https://www.dropbox.com/scl/fi/gwpr5ai97bx905qmaamvb/KR.gmt?rlkey=hw9bup7u1i0p4wog91vxdwkaz&st=8jxpkhyu&dl=1",
+        "data/Paths/road/NZ.gmt": "https://www.dropbox.com/scl/fi/xu4o7gh4fd1nlolqr5kb2/NZ.gmt?rlkey=2h95i3sib6j1tjo6l4p14mlf7&st=6k1c1r5e&dl=1",
+        "data/Paths/road/KR.gmt": "https://www.dropbox.com/scl/fi/u1v08tnqfwl69kbqc6vp6/KR.gmt?rlkey=rie315iw8zdgpqclegbhdto60&st=jlbcqxhe&dl=1",
+        "data/Paths/highway/NZ.gmt": "https://www.dropbox.com/scl/fi/pycl9rapaw4h8oapnk2zx/NZ.gmt?rlkey=jup637ec1kabfq57il8q2z52i&st=5jpaxeih&dl=1",
+        "data/Paths/highway/KR.gmt": "https://www.dropbox.com/scl/fi/ogs9bwlq1qcmqkm73e7tr/KR.gmt?rlkey=eneeceqzmbifuyg2f5sdc1roc&st=hrenqhm4&dl=1",
+        "data/Topo/srtm_NZ.grd": "https://www.dropbox.com/scl/fi/mq99chc3u9nl0cqvszadj/srtm_NZ.grd?rlkey=kypozxtqfenheqz0lv0w9j9ee&st=jhhht7q3&dl=1",
+        "data/Topo/srtm_NZ_i5.grd": "https://www.dropbox.com/scl/fi/mdbtf90bq7gnmh9vzpd9u/srtm_NZ_i5.grd?rlkey=mztlms8huuacq1ygujpwo9zia&st=pkwb2wfe&dl=1",
+        "data/Topo/srtm_NZ_1s.grd": "https://www.dropbox.com/scl/fi/z3nymvy41rrxctuxh16xl/srtm_NZ_1s.grd?rlkey=ja1hmecgz3dz6zcblua64sr8t&st=x09hn3pu&dl=1",
+        "data/Topo/srtm_NZ_1s_i5.grd": "https://www.dropbox.com/scl/fi/avzaeu6zqbhp4xkfqwtrt/srtm_NZ_1s_i5.grd?rlkey=iyj82hsqyrv7w7x6o5t9191jo&st=3i48q15r&dl=1",
+        "data/Topo/srtm_KR.grd": "https://www.dropbox.com/scl/fi/ds23toeh73uj4tyza86kd/srtm_KR.grd?rlkey=knz42nbdhw0ozkarc9izp6941&st=t1v7v572&dl=1",
+        "data/Topo/srtm_KR_i5.grd": "https://www.dropbox.com/scl/fi/rtzfo07s6gjdm9xofdj6h/srtm_KR_i5.grd?rlkey=kjb0quk06z8npz13hsaizgn4i&st=a5ix7lgn&dl=1",
+        "data/regions.ll": "https://www.dropbox.com/scl/fi/073atd0ebcrmob46a8yp5/regions.ll?rlkey=g54pfbd6jr25k24vm6ohgy6dq&st=1sgbox8p&dl=1",
+        "data/cpt/trise.cpt": "https://www.dropbox.com/scl/fi/scn9qbp5g7eq6qparbr5c/trise.cpt?rlkey=a7my5euwoqoqyi3xu5340o1jt&st=3pcuy7hj&dl=1",
+        "data/cpt/slip.cpt": "https://www.dropbox.com/scl/fi/e7jwxfpeneke7g6ay4gqi/slip.cpt?rlkey=8ouopksidlsx6yy9acejspodt&st=vnq4tehy&dl=1",
+        "data/cpt/palm_springs_nz_topo.cpt": "https://www.dropbox.com/scl/fi/1thpu13lmwtwfrblgse75/palm_springs_nz_topo.cpt?rlkey=46wame3m05ae0yb3axfblmaqe&st=8qnrtd9s&dl=1",
+        "data/cpt/palm_springs_1.cpt": "https://www.dropbox.com/scl/fi/lfbjuw68be2437n5w0t57/palm_springs_1.cpt?rlkey=upzukhcz4nb2s81f8nmy9ezk7&st=dv9aipum&dl=1",
+        "data/cpt/nz_topo_grey1.cpt": "https://www.dropbox.com/scl/fi/32kmnru3gdxslcyarb5se/nz_topo_grey1.cpt?rlkey=yioo4il6rdbs520mapaniulr1&st=92gqx1jq&dl=1",
+        "data/cpt/mmi.cpt": "https://www.dropbox.com/scl/fi/wjjnwzydtfcl5v485vffy/mmi.cpt?rlkey=jvq9z8qg49fwk1uohej4v8m6r&st=ztkq2yt2&dl=1",
+        "data/cpt/mmi-labels.cpt": "https://www.dropbox.com/scl/fi/xg7i949rhtgeeqdeo6qd7/mmi-labels.cpt?rlkey=yklw07uwqjo2yn0580gwy544b&st=j4xvri1x&dl=1",
+        "data/cpt/liquefaction_susceptibility.cpt": "https://www.dropbox.com/scl/fi/2ocuygxo9qqq6v33os1r6/liquefaction_susceptibility.cpt?rlkey=wkbvwjjsl7mpc09bg7tedmztf&st=1txd338v&dl=1",
+        "data/cpt/liquefaction_susceptibility_nolabel.cpt": "https://www.dropbox.com/scl/fi/sv35h9tbtmk8oo3x6gv6a/liquefaction_susceptibility_nolabel.cpt?rlkey=hgzcvq1uwppch6n70ff22s16t&st=j327gq8d&dl=1",
+        "data/cpt/landslide_susceptibility.cpt": "https://www.dropbox.com/scl/fi/k5903mjgablxkotvoscsy/landslide_susceptibility.cpt?rlkey=rzjjatnbht021tdwc7rswgtlu&st=69rr315q&dl=1",
+        "data/cpt/landslide_susceptibility_nolabel.cpt": "https://www.dropbox.com/scl/fi/5qfrh1fv7bcscopnsttvp/landslide_susceptibility_nolabel.cpt?rlkey=tdc9xeay84k30r6s4ze1198nt&st=6n7htezq&dl=1",
+        "data/cpt/hot-orange.cpt": "https://www.dropbox.com/scl/fi/5gfr9mtykrge2fy6h4jrb/hot-orange.cpt?rlkey=pnyx5864v5ym6fhv237esjwqa&st=q1l2bxmb&dl=1",
+        "data/cpt/hot-orange-log.cpt": "https://www.dropbox.com/scl/fi/ggq31kcc5e5qdn6guihoe/hot-orange-log.cpt?rlkey=8z05lhwkqz5on0nji5yhms1gl&st=7hbbih07&dl=1",
+    },
+)
 
 
 class NZMapData(NamedTuple):
@@ -27,7 +94,7 @@ class NZMapData(NamedTuple):
 
     @classmethod
     def load(cls, high_res_topo: bool = False) -> Self:
-        """Load NZMapData from qcore resources.
+        """Load NZMapData.
 
         Parameters
         ----------
@@ -39,17 +106,17 @@ class NZMapData(NamedTuple):
         NZMapData
             A map data object containing the paths to the map data.
         """
-        road_ffp = gmt.GMT_DATA.fetch("data/Paths/road/NZ.gmt")
-        highway_ffp = gmt.GMT_DATA.fetch("data/Paths/highway/NZ.gmt")
-        coastline_ffp = gmt.GMT_DATA.fetch("data/Paths/coastline/NZ.gmt")
-        water_ffp = gmt.GMT_DATA.fetch("data/Paths/water/NZ.gmt")
+        road_ffp = GMT_DATA.fetch("data/Paths/road/NZ.gmt")
+        highway_ffp = GMT_DATA.fetch("data/Paths/highway/NZ.gmt")
+        coastline_ffp = GMT_DATA.fetch("data/Paths/coastline/NZ.gmt")
+        water_ffp = GMT_DATA.fetch("data/Paths/water/NZ.gmt")
 
         if high_res_topo:
-            topo_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_1s.grd")
-            topo_shading_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_1s_i5.grd")
+            topo_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_1s.grd")
+            topo_shading_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_1s_i5.grd")
         else:
-            topo_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ.grd")
-            topo_shading_ffp = gmt.GMT_DATA.fetch("data/Topo/srtm_NZ_i5.grd")
+            topo_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ.grd")
+            topo_shading_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_i5.grd")
 
         return cls(
             road_df=geopandas.read_file(road_ffp),
@@ -64,9 +131,14 @@ class NZMapData(NamedTuple):
 
 
 DEFAULT_PLT_KWARGS = dict(
+    water_color="lightblue",
+    land_color="lightgray",
     road_pen_width=0.01,
+    road_pen_color="white",
     highway_pen_width=0.5,
+    highway_pen_color="yellow",
     coastline_pen_width=0.05,
+    coastline_pen_color="black",
     topo_cmap="gray",
     topo_cmap_min=-3000,
     topo_cmap_max=3000,
@@ -197,14 +269,21 @@ def _draw_map_data(
     plot_kwargs : dict[str, str | int], optional
         A dictionary of plotting options, including:
 
+        - ``"water_color"`` (str): Color for water.
+        - ``"land_color"`` (str): Color for land. This only has a visible effect
+            for very zoomed in maps, where differences between coastline definition
+            and the topo tiles are visible.
         - ``"coastline_pen_width"`` (str or int): Line width for coastline.
+        - ``"coastline_pen_color"`` (str): Color for coastline.
         - ``"topo_cmap_min"`` (int): Minimum value for the topography colormap.
         - ``"topo_cmap_max"`` (int): Maximum value for the topography colormap.
         - ``"topo_cmap_inc"`` (int): Increment for the topography colormap.
         - ``"topo_cmap"`` (str): Name of the colormap for topography.
         - ``"topo_cmap_reverse"`` (bool): Whether to reverse the topography colormap.
         - ``"road_pen_width"`` (str or int): Line width for roads.
+        - ``"road_pen_color"`` (str): Color for roads.
         - ``"highway_pen_width"`` (str or int): Line width for highways.
+        - ``"highway_pen_color"`` (str): Color for highways.
     """
     # Plot coastline and background water
     water_bg = geopandas.GeoSeries(
@@ -217,11 +296,11 @@ def _draw_map_data(
             ]
         )
     )
-    fig.plot(water_bg, fill="lightblue", straight_line=True)
+    fig.plot(water_bg, fill=plot_kwargs["water_color"], straight_line=True)
     fig.plot(
         data=map_data.coastline_df,
-        pen=f"{plot_kwargs['coastline_pen_width']}p,black",
-        fill="lightgray",
+        pen=f"{plot_kwargs['coastline_pen_width']}p,{plot_kwargs['coastline_pen_color']}",
+        fill=plot_kwargs["land_color"],
     )
 
     # Add topo
@@ -244,15 +323,18 @@ def _draw_map_data(
         )
 
     # Plot water
-    fig.plot(data=map_data.water_df, fill="lightblue")
+    fig.plot(data=map_data.water_df, fill=plot_kwargs["water_color"])
 
     # Add roads
     if plot_roads:
-        fig.plot(data=map_data.road_df, pen=f"{plot_kwargs['road_pen_width']}p,white")
+        fig.plot(
+            data=map_data.road_df,
+            pen=f"{plot_kwargs['road_pen_width']}p,{plot_kwargs['road_pen_color']}",
+        )
     if plot_highways:
         fig.plot(
             data=map_data.highway_df,
-            pen=f"{plot_kwargs['highway_pen_width']}p,yellow",
+            pen=f"{plot_kwargs['highway_pen_width']}p,{plot_kwargs['highway_pen_color']}",
         )
 
 
@@ -371,7 +453,8 @@ def plot_grid(
         phase = f"+{cmap_limits[0]}" if cmap_limits[0] > 0 else f"+{cmap_limits[1]}"
         cb_frame = [f"a+{cmap_limits[2] * 2}{phase}f+{cmap_limits[2]}"]
         if cb_label is not None:
-            cb_frame.append(f"x+l{cb_label.replace(' ', r'\040')}")
+            cb_label = cb_label.replace(" ", r"\040")
+            cb_frame.append(f"x+l{cb_label}")
         fig.colorbar(
             cmap=cpt_ffp,
             frame=cb_frame,
