@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Self
 
-import pooch
 import geopandas
 import numpy as np
 import pandas as pd
+import pooch
 import pygmt
 import xarray as xr
 from scipy import interpolate
@@ -157,7 +157,8 @@ def gen_region_fig(
     plot_highways: bool = True,
     plot_topo: bool = True,
     plot_kwargs: dict[str, Any] = None,
-    config_options: dict[str, str | int] = None,
+    config_options: dict[str, Any] = None,
+    coast_options: dict[str, Any] = None,
     subtitle: Optional[str] = None,
 ):
     """
@@ -189,6 +190,14 @@ def gen_region_fig(
     config_options : dict, optional
         Configuration options to apply to the figure. See the GMT configuration
         documentation [1]_ for available options.
+    coast_options : dict, optional
+        Additional options for the coastlines. If not provided and `map_data` is None,
+        the following defaults are used:
+            - "resolution": "f" (full resolution)
+            - "land": "#666666" (dark gray land color)
+            - "water": "skyblue" (light blue water color)
+            - "shorelines": ["1/0.1p,black", "2/0.1p,black"] (shoreline styles)
+        See `pygmt.Figure.coast` for additional details.
     subtitle : str, optional
         Subtitle of the figure.
 
@@ -224,11 +233,14 @@ def gen_region_fig(
 
     # Plots the default coast (sea & inland lakes/rivers)
     if map_data is None:
+        coast_options = coast_options or {
+            "resolution": "f",
+            "land": "#666666",
+            "water": "skyblue",
+            "shorelines": ["1/0.1p,black", "2/0.1p,black"],
+        }
         fig.coast(
-            shorelines=["1/0.1p,black", "2/0.1p,black"],
-            resolution="f",
-            land="#666666",
-            water="skyblue",
+            **coast_options,
         )
     # Use the custom NZ data
     else:
