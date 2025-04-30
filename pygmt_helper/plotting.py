@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Self
 
-import pooch
 import geopandas
 import numpy as np
 import pandas as pd
+import pooch
 import pygmt
 import xarray as xr
 from scipy import interpolate
@@ -157,8 +157,8 @@ def gen_region_fig(
     plot_highways: bool = True,
     plot_topo: bool = True,
     plot_kwargs: dict[str, Any] = None,
-    config_options: dict[str, str | int] = None,
-    coast_options: dict[str, str | int] = None,
+    config_options: dict[str, Any] = None,
+    coast_options: dict[str, Any] = None,
     subtitle: Optional[str] = None,
 ):
     """
