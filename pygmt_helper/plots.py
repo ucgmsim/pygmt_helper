@@ -233,7 +233,7 @@ def im_plots(
         If provided, the function will generate plots for a specific realization (run) identified by this name.
     nhm_ffp : Path, optional
         Path to the NHM file, which can provide fault trace information.
-    nz_map_data: Optional[NZMapData], default=None
+    nz_map_data : Optional[NZMapData], default=None
         The NZMapData object to supply topographic data.
     cb_limits_dict : dict, optional
         A dictionary specifying the color bar limits for each intensity measure (IM). If None, limits will be automatically computed.
