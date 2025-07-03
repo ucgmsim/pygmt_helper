@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import numpy as np
@@ -7,8 +8,8 @@ from qcore import nhm
 from pygmt_helper import plots, plotting
 
 # Config
-nhm_ffp = Path("path to nhm file")
-output_dir = Path("path to the output directory")
+nhm_ffp = Path("/Users/claudy/dev/work/data/nn_gmm/source/NZ_FLTmodel_2010.txt")
+output_dir = Path("./")
 
 # If true, then for each CS fault
 # all realisation hypocentres are plotted
@@ -46,7 +47,7 @@ fig = plots.faults_plot(
     show_hypo=show_hypo,
 )
 fig.savefig(
-    output_dir / f"faults.png",
+    output_dir / f"fault_traces.png",
     dpi=900,
     anti_alias=True,
 )

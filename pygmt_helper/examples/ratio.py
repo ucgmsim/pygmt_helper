@@ -16,25 +16,22 @@ site_locations = (
     / "non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll"
 )
 # output_dir = Path("path to the output directory")
-output_dir = Path("/Users/claudy/dev/work/tmp/srf_plots")
+output_dir = Path("./")
 
 # Load locations
 df = pd.read_csv(
     site_locations,
-    delim_whitespace=True,
+    sep=r"\s+",
     index_col=2,
     header=None,
     names=["lon", "lat"],
 )
 
-# Load plotting data
-map_data = plotting.NZMapData.load()
-
 # Add some fake data
 df["ratio"] = np.random.uniform(-0.5, 0.5, df.shape[0])
 
 # Create the figure
-fig = plotting.gen_region_fig("Ratio", map_data=map_data)
+fig = plotting.gen_region_fig("Ratio")
 
 # Compute the interpolated grid
 grid = plotting.create_grid(df, "ratio")
