@@ -46,4 +46,4 @@ fig.savefig(
 ```
 
 ### Examples
-The example folder contains multiple complete (except of map data, which is part of qcore) examples plots.
+The example folder contains multiple complete examples plots.
