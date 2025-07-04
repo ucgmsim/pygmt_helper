@@ -451,11 +451,7 @@ def disagg_plot(
         "zsize": "5c",
         "perspective": [150, 35],
     }
-    plot_kwargs = (
-        DEFAULT_PLOT_KWARGS
-        if plot_kwargs is None
-        else DEFAULT_PLOT_KWARGS | plot_kwargs
-    )
+    plot_kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
 
     # Create the figure
     region = [
@@ -470,7 +466,6 @@ def disagg_plot(
     fig.basemap(
         region=region,
         perspective=plot_kwargs["perspective"],
-        # zscale=plot_kwargs["zscale"],
         zsize=plot_kwargs["zsize"],
         frame=[
             "wSnEZ1",

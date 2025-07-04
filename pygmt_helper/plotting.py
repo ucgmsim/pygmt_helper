@@ -4,7 +4,7 @@ import itertools
 import copy
 import tempfile
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Self
+from typing import Any, NamedTuple, Optional, Self, Callable
 
 import geopandas
 import numpy as np
@@ -188,7 +188,7 @@ def gen_region_fig(
     title: Optional[str] = None,
     region: tuple[float, float, float, float] | None = None,
     projection: str = "M17.0c",
-    plot_roads: bool = True,
+    plot_roads: bool = False,
     plot_highways: bool = True,
     plot_topo: bool = True,
     high_res_topo: bool = False,
@@ -197,6 +197,9 @@ def gen_region_fig(
     subtitle: Optional[str] = None,
     fig: pygmt.Figure | None = None,
     high_quality: bool = False,
+    custom_shading_fn: (
+        Callable[[xr.DataArray, xr.DataArray], xr.DataArray] | None
+    ) = None,
 ):
     """
     Generates a basic map figure for a specified region, including coastlines,
@@ -206,7 +209,7 @@ def gen_region_fig(
     ----------
     title : str, optional
         Title of the figure.
-    region : str or tuple of float
+    region : tuple of float, optional
         The region to plot, defined as a tuple of four floats
         (min_lon, max_lon, min_lat, max_lat).
         If None, then creates a NZ-wide map.
@@ -222,7 +225,7 @@ def gen_region_fig(
     high_res_topo : bool, optional
         If True, use high resolution topography data.
         Requires ``plot_topo`` to be True.
-        Only usefules when plotting small regions, e.g. cities,
+        Only useful when plotting small regions, e.g. cities,
         makes no difference for large regions or NZ-wide maps.
         Increases plotting time.
     plot_kwargs : dict, optional
@@ -261,6 +264,13 @@ def gen_region_fig(
         with the coastline and water boundaries.
 
         Increases plotting time.
+    custom_shading_fn : Callable, optional
+        A custom function to modify the topography shading grid.
+        Function takes two arguments: topo_grid and topo_shading_grid,
+        both of type `xr.DataArray`, and should return a modified
+        `xr.DataArray` for the shading grid.
+
+        Only applied if `plot_topo` and `high_quality` are True.
 
     Returns
     -------
@@ -335,6 +345,9 @@ def gen_region_fig(
             )
             topo_grid = map_data.topo_grid.where(topo_land_mask, np.nan)
             topo_shading_grid = map_data.topo_shading_grid.where(topo_land_mask, np.nan)
+
+            if custom_shading_fn:
+                topo_shading_grid = custom_shading_fn(topo_grid, topo_shading_grid)
         # Drop topo points not on land, based on
         # topo grid elevation.
         else:
@@ -518,9 +531,10 @@ def create_grid(
     data_df: pd.DataFrame,
     data_key: str,
     grid_spacing: str = "200e/200e",
-    region: str | tuple[float, float, float, float] = "NZ",
+    region: tuple[float, float, float, float] | None = None,
     interp_method: str = "linear",
     set_water_to_nan: bool = True,
+    high_quality: bool = False,
 ):
     """Generates a regular grid from unstructured data.
 
@@ -535,14 +549,17 @@ def create_grid(
     grid_spacing : str
         Grid spacing specification, using GMT gridding conventions.
         See the spacing parameter of `pygmt.grdlandmask` or the Notes section.
-    region : str or tuple of (float, float, float, float)
-        The region to plot. If a string, it should correspond to a predefined region
-        (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
+    region : tuple of float, optional
+        The region to generate grid for, defined as a tuple of four floats
         (min_lon, max_lon, min_lat, max_lat).
+        If None, then create NZ-wide grid.
     interp_method : str
         The interpolation method to apply between points in `data_df`. Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
     set_water_to_nan : bool
         If True, set water values in the grid to NaN.
+    high_quality : bool, optional
+        If True, use NZ-specific land/water mask for gridding,
+        instead of pygmt.grdlandmask.
 
     Returns
     -------
@@ -559,9 +576,19 @@ def create_grid(
     """
 
     # Create the land/water mask
-    land_mask = pygmt.grdlandmask(
-        region=region, spacing=grid_spacing, maskvalues=[0, 1, 1, 1, 1], resolution="f"
-    )
+    if high_quality and region is not None:
+        land_mask = get_landmask(
+            NZMapData.load(region=region),
+            region,
+            grid_spacing=grid_spacing,
+        )
+    else:
+        land_mask = pygmt.grdlandmask(
+            region=region if region else "NZ",
+            spacing=grid_spacing,
+            maskvalues=[0, 1, 1, 1, 1],
+            resolution="f",
+        )
 
     # Use land/water mask to create meshgrid
     x1, x2 = np.meshgrid(land_mask.lon.values, land_mask.lat.values)
@@ -706,8 +733,5 @@ def get_landmask(
     )
     grid_points_mask = on_land(map_data, grid_points, region=region)
     land_mask[:] = grid_points_mask.reshape(land_mask.shape)
-
-    # Set water to NaN
-    land_mask = land_mask.where(land_mask == 1, np.nan)
 
     return land_mask

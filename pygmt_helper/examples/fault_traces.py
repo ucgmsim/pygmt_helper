@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +7,7 @@ from qcore import nhm
 from pygmt_helper import plots, plotting
 
 # Config
-nhm_ffp = Path("/Users/claudy/dev/work/data/nn_gmm/source/NZ_FLTmodel_2010.txt")
+nhm_ffp = Path("path to nhm file")
 output_dir = Path("./")
 
 # If true, then for each CS fault
