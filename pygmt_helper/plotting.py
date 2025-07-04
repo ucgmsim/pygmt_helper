@@ -254,6 +254,8 @@ def gen_region_fig(
         documentation [1]_ for available options.
     subtitle : str, optional
         Subtitle of the figure.
+    fig : pygmt.Figure, optional
+        A PyGMT figure object to plot on. If None, a new figure is created.
     high_quality : bool, optional
         If True, produce highest quality map.
         Should only be used for small regions, e.g. cities,
@@ -658,7 +660,28 @@ def on_land(
     points: np.ndarray,
     region: tuple[float, float, float, float] | None = None,
 ):
+    """
+    Checks if the given points are on land based on the
+    `map_data` coastline and water polygons.
 
+    Parameters
+    ----------
+    map_data : NZMapData
+        The map data containing coastline and water polygons.
+    points : np.ndarray
+        An array of points with shape (n_points, 2) where each row is [lat, lon].
+    region : tuple of (float, float, float, float), optional
+        The region of interest, providing this will
+        significantly speed up the check.
+        If None, checks all points against the
+        full NZ coastline and water polygons (slow).
+
+    Returns
+    -------
+    np.ndarray
+        A boolean array of the same length as `points`, where True indicates
+        that the point is on land and False indicates that it is in water.
+    """
     # Load coastline and water polygons
     coast_polygon_arrays = [
         np.array(list(cur_poly.coords))

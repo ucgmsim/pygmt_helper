@@ -15,7 +15,7 @@ dynamic = ["dependencies"]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.deptry]
-ignore_unused = ["pyarrow"]
+ignore_unused = ["pyarrow", "netcdf4"]
 
 [tool.ruff]
 extend-exclude = ['pygmt_helper/examples/']
