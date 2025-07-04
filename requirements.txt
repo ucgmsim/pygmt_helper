@@ -1,7 +1,7 @@
 numpy
 pandas
 geopandas>1.0
-pyarrow
+pyarrow # deptry: ignore - indirect dependency for pandas parquet support
 pygmt
 xarray
 scipy
@@ -11,4 +11,4 @@ pytest
 pytest-cov
 pooch
 tqdm
-netcdf4
+netcdf4 # deptry: ignore - indirect dependency for xarray
