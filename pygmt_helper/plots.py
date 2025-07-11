@@ -384,8 +384,9 @@ def disagg_plot(
     dist_mag_region: tuple[float, float, float, float],
     category_key: str,
     category_specs: dict,
-    output_ffp: Path,
+    output_ffp: Path | None = None,
     plot_kwargs: dict | None = None,
+    verbose: bool = True,
 ) -> None:
     """
     Creates a 3D disaggregation plot.
@@ -417,19 +418,28 @@ def disagg_plot(
         - Color specification for the category (e.g. "blue", "#FF0000").
 
         Note: There has to be one entry in this dictionary for each unique value
-        in `disagg_df[category_key]`. 
+        in `disagg_df[category_key]`.
     output_ffp : Path
         The file path where the plot will be saved.
     plot_kwargs : dict, optional
         Additional keyword arguments for the plot.
         Default values are used if not provided.
         Valid keys include:
-        - 'width_factor': Factor to scale the width of the bin columns, 
+        - 'width_factor': Factor to scale the width of the bin columns,
             value has to be between 0 - 1. Default is 0.8.
         - 'zsize': Size of the z-axis in plot units (e.g. "5c" for 5 cm).
             Default is "5c".
         - 'perspective': Perspective of the 3D plot, given as a list of two angles
             [azimuth, elevation]. Default is [150, 35].
+    verbose : bool, default=True
+        If `True`, prints progress messages during plotting.
+
+    Returns
+    -------
+    None
+        The function saves the plot to `output_ffp` if provided.
+    fig: pygmt.Figure
+        If `output_ffp` is None, the function returns the created figure object.
     """
     if len(category_specs) != disagg_df[category_key].nunique():
         raise ValueError(
@@ -476,8 +486,7 @@ def disagg_plot(
     )
 
     # Iterate over mag/dist groups
-    for cur_key, cur_group in tqdm(disagg_bin_groups):
-
+    for cur_key, cur_group in tqdm(disagg_bin_groups, desc="Plotting disagg bins", disable=not verbose):
         # Iterate over the category types
         cur_base = 0
         for _, cur_row in cur_group.iterrows():
@@ -490,7 +499,6 @@ def disagg_plot(
                 z=cur_base + cur_row["contribution"],
                 region=region,
                 perspective=plot_kwargs["perspective"],
-                # zscale= plot_kwargs["zscale"],
                 zsize=plot_kwargs["zsize"],
                 style=f"o{cur_row['dist_bin_width'] * plot_kwargs['width_factor']}q/{cur_row['mag_bin_width'] * plot_kwargs['width_factor']}qb{cur_base}",
                 fill=category_specs[cur_row[category_key]][1],
@@ -513,4 +521,8 @@ def disagg_plot(
         box="+gwhite+p1p",
     )
 
-    fig.savefig(output_ffp, dpi=900, anti_alias=True)
+    if output_ffp:
+        fig.savefig(output_ffp, dpi=900, anti_alias=True)
+    else: 
+        return fig
+        
