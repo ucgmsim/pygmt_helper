@@ -14,7 +14,6 @@ dynamic = ["dependencies"]
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
-
 [tool.ruff]
 extend-exclude = ['pygmt_helper/examples/']
 

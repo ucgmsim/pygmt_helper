@@ -8,7 +8,7 @@ from pygmt_helper import plots, plotting
 
 # Config
 nhm_ffp = Path("path to nhm file")
-output_dir = Path("path to the output directory")
+output_dir = Path("./")
 
 # If true, then for each CS fault
 # all realisation hypocentres are plotted
@@ -46,7 +46,7 @@ fig = plots.faults_plot(
     show_hypo=show_hypo,
 )
 fig.savefig(
-    output_dir / f"faults.png",
+    output_dir / f"fault_traces.png",
     dpi=900,
     anti_alias=True,
 )

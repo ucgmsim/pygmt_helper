@@ -21,12 +21,9 @@ region = [171.54, 173.12, -43.95, -43.22]
 # Region of the inset
 inset_region = [172.60, 172.69, -43.545, -43.495]
 # Output file name
-output_ffp = Path("path to the output file")
-# If true, then use New Zealand specific map data
-use_map_data = True
+output_ffp = Path("./event_stations.png")
 # If true, then use the high resolution topography
-# This will further increase plot time, and only has an
-# effect if use_map_data is set
+# This will further increase plot time
 use_high_res_topo = True
 # List of events to highlight
 events_to_highlight = None
@@ -61,14 +58,10 @@ sites_df = sites_df.loc[
 # Magnitude filter
 event_df = event_df.loc[event_df.mag > min_mag]
 
-
-# Load map data
-map_data = plotting.NZMapData.load(high_res_topo=use_high_res_topo) if use_map_data else None
-
 # Generate the figure
 fig = plotting.gen_region_fig(
     region=(min_lon, max_lon, min_lat, max_lat),
-    map_data=map_data,
+    high_res_topo=use_high_res_topo,
     config_options=dict(
         MAP_FRAME_TYPE="plain",
         FORMAT_GEO_MAP="ddd.xx",
@@ -92,8 +85,8 @@ for ix, (cur_event, cur_row) in enumerate(event_df.iterrows()):
             magnitude=cur_row.mag,
         ),
         scale=f"{0.06 * cur_row.mag}c",
-        G=cur_c,
-        W="0.05p,black,solid",
+        compressionfill=cur_c,
+        pen="0.05p,black,solid",
         longitude=cur_row.lon,
         latitude=cur_row.lat,
         depth=cur_row.depth,
@@ -134,19 +127,12 @@ with fig.inset(
     margin=0,
     box="+p0.5p,black",
 ):
-    fig.basemap(frame=False)
-
-    # Plots the default coast (sea & inland lakes/rivers)
-    if map_data is None:
-        fig.coast(
-            shorelines=["1/0.1p,black", "2/0.1p,black"],
-            resolution="f",
-            land="#666666",
-            water="skyblue",
-        )
-    # Use the custom NZ data
-    else:
-        plotting._draw_map_data(fig, map_data, plot_kwargs=plotting.DEFAULT_PLT_KWARGS)
+    fig = plotting.gen_region_fig(
+        region=inset_region,
+        high_res_topo=use_high_res_topo,
+        high_quality=True,
+        fig=fig
+    )
 
     # Plot the sites
     inset_sites_df = sites_df.loc[

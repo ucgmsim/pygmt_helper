@@ -8,7 +8,7 @@ from pygmt_helper import plotting
 
 # Config
 ds_ffp = Path(__file__).parent / "resources" / "NZ_DSmodel_2015.txt"
-output_dir = Path("path to the output directory")
+output_dir = Path("./")
 
 
 # If set to true then each rupture is weighted by recurance probability
@@ -22,9 +22,6 @@ split_ids = np.stack(
 ).T
 ds_df["lat"] = split_ids[:, 0]
 ds_df["lon"] = split_ids[:, 1]
-
-# Plotting data
-map_data = plotting.NZMapData.load()
 
 if incl_rec_prob:
     sum_df = (
@@ -48,8 +45,6 @@ else:
 
 fig = plotting.gen_region_fig(
     "Distributed Seismicity Sources",
-    "NZ",
-    map_data=map_data,
     plot_topo=True,
     plot_roads=False,
     plot_highways=True,
@@ -66,7 +61,7 @@ fig.plot(
     x=sum_df.lon.values.astype(float),
     y=sum_df.lat.values.astype(float),
     style="c0.07c",
-    color=sum_df["sum"].values,
+    fill=sum_df["sum"].values,
     cmap=True,
     transparency=10,
     pen="0.1p,black",

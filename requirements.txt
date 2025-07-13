@@ -1,6 +1,7 @@
 numpy
 pandas
-geopandas
+geopandas>1.0
+pyarrow 
 pygmt
 xarray
 scipy
@@ -9,3 +10,5 @@ qcore @ git+https://github.com/ucgmsim/qcore.git
 pytest
 pytest-cov
 pooch
+tqdm
+netcdf4 

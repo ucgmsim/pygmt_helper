@@ -1,9 +1,10 @@
 """Plotting tools to generate basemaps, grids and contours with PyGMT."""
 
+import itertools
 import copy
 import tempfile
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Self
+from typing import Any, NamedTuple, Optional, Self, Callable
 
 import geopandas
 import numpy as np
@@ -13,19 +14,23 @@ import pygmt
 import xarray as xr
 from scipy import interpolate
 from shapely import geometry
+from qcore import point_in_polygon
 
 GMT_DATA = pooch.create(
     pooch.os_cache("pygmt_helper"),
     base_url="",
     registry={
         "data/Paths/water/NZ.gmt": "sha256:9abdd22ee120ce50613d3745825caeac5fc6f9ccec3bc80a4bc33d6de6cbd218",
+        "data/Paths/water/NZ.parquet": "sha256:1ede5670a17c0a8cadef7de352d47b59b36d90ffab11ad8cc6d1e2d2eddbbe6a",
         "data/Topo/srtm_KR.grd": "sha256:cc59be8e9ee8cabb75587c040fd67597eb02116e225eeae89949e6f924058325",
         "data/Topo/srtm_NZ.grd": "sha256:adb3eb43cd20be468b15cba52f8953538bf7523361f1f2d7b68dbf74113cc06c",
         "data/Paths/water/KR.gmt": "sha256:9950b917d3f4e239e908f93f65705424082ae55f072d6a7926bb56298c2f5b28",
         "data/Topo/srtm_KR_i5.grd": "sha256:adbacea622607b91438fee68999ebc7c8dd9eb35b3230708a9a5a21fc0de472b",
         "data/regions.ll": "sha256:17ad7202395af54dea08f93f0b9ed8438fcb05834bc12242fa4fb770395ba899",
         "data/Paths/coastline/NZ.gmt": "sha256:31660def8f51d6d827008e6f20507153cfbbfbca232cd661da7f214aff1c9ce3",
+        "data/Paths/coastline/NZ.parquet": "sha256:8106ffdf1c5d826acede353e49011a8ff1bc490881bda99acd880c9b2dcdb5d2",
         "data/Paths/highway/NZ.gmt": "sha256:fd03908ecd137fa0bd20184081d7b499d23bc44e4154dad388b3ba8c89893e62",
+        "data/Paths/highway/NZ.parquet": "sha256:e397a5d5f9662abf0627d05ed79dc21ab975546acc3c1d7668d7904c7fd735d3",
         "data/version": "sha256:44804414f85bef9588f60086587fd6e8871b39123c831ec129624f4d81a95fea",
         "data/cpt/nz_topo_grey1.cpt": "sha256:39305ac0739757337241a602a2dca71d0981a9fcc0e3240388b078669f1b3f84",
         "data/cpt/hot-orange-log.cpt": "sha256:c56a2b43690468753489ff56817197ef7faab456a979c2dd9bb6bab80947dc14",
@@ -45,6 +50,7 @@ GMT_DATA = pooch.create(
         "data/img/logo-left.png": "sha256:e254ee4ca2c628e673b6ce04bd1f479d707493aab036e9a012c05f94b999ffdd",
         "data/Paths/road/KR.gmt": "sha256:99a3d6f0da95698c38dfa40e509f125f2713633612ceb2a52cf7286fa2c68358",
         "data/Paths/road/NZ.gmt": "sha256:e01f2ac2fc4a406e1d430c2cffb2d3ef10e260b10148fd9dc92723888cc24a68",
+        "data/Paths/road/NZ.parquet": "sha256:046d8072a5ad4d45cb8f5123e3f5368ea0afb3fdd1b1f96c3fc82271146af41a",
         "data/Topo/srtm_NZ_i5.grd": "sha256:a2bd8c148015933b845a9760559457bd42b937fdd34ecb2d72a44f25e691cae4",
         "data/Topo/srtm_NZ_1s.grd": "sha256:1caecfefda5bf7906593dacc76eeb91123b1768d50b6fe4e3b8ee90a1a3bcdc6",
         "data/Topo/srtm_NZ_1s_i5.grd": "sha256:9a87328e680608542b49f719d230fb92c4a6a3b110720df50c2a6ad3b6c0547f",
@@ -52,11 +58,15 @@ GMT_DATA = pooch.create(
     # Now specify custom URLs for some of the files in the registry.
     urls={
         "data/Paths/coastline/NZ.gmt": "https://www.dropbox.com/scl/fi/zkohh794y0s2189t7b1hi/NZ.gmt?rlkey=02011f4morc4toutt9nzojrw1&st=vpz2ri8x&dl=1",
+        "data/Paths/coastline/NZ.parquet": "https://www.dropbox.com/scl/fi/jpfw1ia678si1mlacv4js/NZ.parquet?rlkey=5mpkg8tzqs3ahfe6h5tr9odh6&st=i280m74j&dl=1",
         "data/Paths/water/NZ.gmt": "https://www.dropbox.com/scl/fi/ik101lnpkn3nn6z01ckcw/NZ.gmt?rlkey=byghec0ktpj00ctgau6704rl7&st=ng70q2fz&dl=1",
+        "data/Paths/water/NZ.parquet": "https://www.dropbox.com/scl/fi/sfbkkeppcl45ypq0dqx65/NZ.parquet?rlkey=nanwv1qbva5zrq7ge82wmabco&st=u2bab0eh&dl=1",
         "data/Paths/water/KR.gmt": "https://www.dropbox.com/scl/fi/gwpr5ai97bx905qmaamvb/KR.gmt?rlkey=hw9bup7u1i0p4wog91vxdwkaz&st=8jxpkhyu&dl=1",
         "data/Paths/road/NZ.gmt": "https://www.dropbox.com/scl/fi/xu4o7gh4fd1nlolqr5kb2/NZ.gmt?rlkey=2h95i3sib6j1tjo6l4p14mlf7&st=6k1c1r5e&dl=1",
+        "data/Paths/road/NZ.parquet": "https://www.dropbox.com/scl/fi/77njl4qzn6slq9ojme574/NZ.parquet?rlkey=roezlj84bcz3drahc8220nr30&st=5r8k531y&dl=1",
         "data/Paths/road/KR.gmt": "https://www.dropbox.com/scl/fi/u1v08tnqfwl69kbqc6vp6/KR.gmt?rlkey=rie315iw8zdgpqclegbhdto60&st=jlbcqxhe&dl=1",
         "data/Paths/highway/NZ.gmt": "https://www.dropbox.com/scl/fi/pycl9rapaw4h8oapnk2zx/NZ.gmt?rlkey=jup637ec1kabfq57il8q2z52i&st=5jpaxeih&dl=1",
+        "data/Paths/highway/NZ.parquet": "https://www.dropbox.com/scl/fi/9d1daa55o7kz2dklzu6zj/NZ.parquet?rlkey=9qb4bnb0zgnvb641qyvtxgkd9&st=3jo7604w&dl=1",
         "data/Paths/highway/KR.gmt": "https://www.dropbox.com/scl/fi/ogs9bwlq1qcmqkm73e7tr/KR.gmt?rlkey=eneeceqzmbifuyg2f5sdc1roc&st=hrenqhm4&dl=1",
         "data/Topo/srtm_NZ.grd": "https://www.dropbox.com/scl/fi/mq99chc3u9nl0cqvszadj/srtm_NZ.grd?rlkey=kypozxtqfenheqz0lv0w9j9ee&st=jhhht7q3&dl=1",
         "data/Topo/srtm_NZ_i5.grd": "https://www.dropbox.com/scl/fi/mdbtf90bq7gnmh9vzpd9u/srtm_NZ_i5.grd?rlkey=mztlms8huuacq1ygujpwo9zia&st=pkwb2wfe&dl=1",
@@ -93,12 +103,20 @@ class NZMapData(NamedTuple):
     topo_shading_grid: xr.DataArray = None
 
     @classmethod
-    def load(cls, high_res_topo: bool = False) -> Self:
+    def load(
+        cls,
+        region: tuple[float, float, float, float] = None,
+        high_res_topo: bool = False,
+    ) -> Self:
         """Load NZMapData.
 
         Parameters
         ----------
-        high_res_topo : bool
+        region : tuple of float, optional
+            The region to load the map data for.
+            If None, loads the full NZ map data.
+            Currently only applied to the topography data.
+        high_res_topo : bool, optional
             If True, load high resolution topographic data.
 
         Returns
@@ -106,10 +124,10 @@ class NZMapData(NamedTuple):
         NZMapData
             A map data object containing the paths to the map data.
         """
-        road_ffp = GMT_DATA.fetch("data/Paths/road/NZ.gmt")
-        highway_ffp = GMT_DATA.fetch("data/Paths/highway/NZ.gmt")
-        coastline_ffp = GMT_DATA.fetch("data/Paths/coastline/NZ.gmt")
-        water_ffp = GMT_DATA.fetch("data/Paths/water/NZ.gmt")
+        road_ffp = GMT_DATA.fetch("data/Paths/road/NZ.parquet")
+        highway_ffp = GMT_DATA.fetch("data/Paths/highway/NZ.parquet")
+        coastline_ffp = GMT_DATA.fetch("data/Paths/coastline/NZ.parquet")
+        water_ffp = GMT_DATA.fetch("data/Paths/water/NZ.parquet")
 
         if high_res_topo:
             topo_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_1s.grd")
@@ -118,15 +136,32 @@ class NZMapData(NamedTuple):
             topo_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ.grd")
             topo_shading_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_i5.grd")
 
+        topo_grid = xr.open_dataset(topo_ffp)["z"]
+        if region:
+            topo_grid = topo_grid.sel(
+                lon=slice(region[0], region[1]),
+                lat=slice(region[2], region[3]),
+            )
+
+        topo_shading = xr.open_dataset(topo_shading_ffp)["z"]
+        if region:
+            topo_shading = topo_shading.sel(
+                lon=slice(region[0], region[1]),
+                lat=slice(region[2], region[3]),
+            )
+
+        bbox = (region[0], region[2], region[1], region[3]) if region else None
         return cls(
-            road_df=geopandas.read_file(road_ffp),
-            highway_df=geopandas.read_file(highway_ffp),
-            coastline_df=geopandas.read_file(coastline_ffp),
-            water_df=geopandas.read_file(water_ffp),
-            topo_grid=pygmt.grdclip(grid=str(topo_ffp), below=[0.1, np.nan]),
-            topo_shading_grid=pygmt.grdclip(
-                grid=str(topo_shading_ffp), below=[0.1, np.nan]
+            road_df=geopandas.read_parquet(road_ffp, bbox=bbox).set_crs("EPSG:4326"),
+            highway_df=geopandas.read_parquet(highway_ffp, bbox=bbox).set_crs(
+                "EPSG:4326"
             ),
+            coastline_df=geopandas.read_parquet(coastline_ffp, bbox=bbox).set_crs(
+                "EPSG:4326"
+            ),
+            water_df=geopandas.read_parquet(water_ffp, bbox=bbox).set_crs("EPSG:4326"),
+            topo_grid=topo_grid,
+            topo_shading_grid=topo_shading,
         )
 
 
@@ -143,6 +178,7 @@ DEFAULT_PLT_KWARGS = dict(
     topo_cmap_min=-3000,
     topo_cmap_max=3000,
     topo_cmap_inc=10,
+    topo_cmap_continous=False,
     topo_cmap_reverse=True,
     frame_args=["af", "xaf+lLongitude", "yaf+lLatitude"],
 )
@@ -150,16 +186,20 @@ DEFAULT_PLT_KWARGS = dict(
 
 def gen_region_fig(
     title: Optional[str] = None,
-    region: str | tuple[float, float, float, float] = "NZ",
+    region: tuple[float, float, float, float] | None = None,
     projection: str = "M17.0c",
-    map_data: NZMapData = None,
-    plot_roads: bool = True,
+    plot_roads: bool = False,
     plot_highways: bool = True,
     plot_topo: bool = True,
+    high_res_topo: bool = False,
     plot_kwargs: dict[str, Any] = None,
     config_options: dict[str, Any] = None,
-    coast_options: dict[str, Any] = None,
     subtitle: Optional[str] = None,
+    fig: pygmt.Figure | None = None,
+    high_quality: bool = False,
+    custom_shading_fn: (
+        Callable[[xr.DataArray, xr.DataArray], xr.DataArray] | None
+    ) = None,
 ):
     """
     Generates a basic map figure for a specified region, including coastlines,
@@ -169,37 +209,70 @@ def gen_region_fig(
     ----------
     title : str, optional
         Title of the figure.
-    region : str or tuple of float
-        The region to plot. If a string, it should correspond to a predefined region
-        (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
+    region : tuple of float, optional
+        The region to plot, defined as a tuple of four floats
         (min_lon, max_lon, min_lat, max_lat).
+        If None, then creates a NZ-wide map.
     projection : str
         The map projection string. See the PyGMT documentation [0]_ for details.
-    map_data : NZMapData, optional
-        Custom map data object from qcore, used to plot additional geographical
-        features.
     plot_roads : bool, optional, default=True
         If True, plot roads on the map.
     plot_highways : bool, optional, default=True
         If True, plot highways on the map.
     plot_topo : bool, optional, default=True
         If True, plot topography on the map.
+        Setting this to False will significantly speed up plotting
+    high_res_topo : bool, optional
+        If True, use high resolution topography data.
+        Requires ``plot_topo`` to be True.
+        Only useful when plotting small regions, e.g. cities,
+        makes no difference for large regions or NZ-wide maps.
+        Increases plotting time.
     plot_kwargs : dict, optional
         Additional plotting arguments, overriding values in `DEFAULT_PLT_KWARGS`.
         Only specify the options to be overridden.
+
+        Plotting options are:
+        - ``"water_color"`` (str): Color for water.
+        - ``"land_color"`` (str): Color for land. This only has a visible effect
+            for very zoomed in maps, where differences between coastline definition
+            and the topo tiles are visible.
+        - ``"coastline_pen_width"`` (str or int): Line width for coastline.
+        - ``"coastline_pen_color"`` (str): Color for coastline.
+        - ``"topo_cmap_min"`` (int): Minimum value for the topography colormap.
+        - ``"topo_cmap_max"`` (int): Maximum value for the topography colormap.
+        - ``"topo_cmap_inc"`` (int): Increment for the topography colormap.
+        - ``"topo_cmap"`` (str): Name of the colormap for topography.
+        - ``"topo_cmap_continous"`` (bool): Whether to use a continuous colormap.
+        - ``"topo_cmap_reverse"`` (bool): Whether to reverse the topography colormap.
+        - ``"road_pen_width"`` (str or int): Line width for roads.
+        - ``"road_pen_color"`` (str): Color for roads.
+        - ``"highway_pen_width"`` (str or int): Line width for highways.
+        - ``"highway_pen_color"`` (str): Color for highways.
     config_options : dict, optional
         Configuration options to apply to the figure. See the GMT configuration
         documentation [1]_ for available options.
-    coast_options : dict, optional
-        Additional options for the coastlines. If not provided and `map_data` is None,
-        the following defaults are used:
-            - "resolution": "f" (full resolution)
-            - "land": "#666666" (dark gray land color)
-            - "water": "skyblue" (light blue water color)
-            - "shorelines": ["1/0.1p,black", "2/0.1p,black"] (shoreline styles)
-        See `pygmt.Figure.coast` for additional details.
     subtitle : str, optional
         Subtitle of the figure.
+    fig : pygmt.Figure, optional
+        A PyGMT figure object to plot on. If None, a new figure is created.
+    high_quality : bool, optional
+        If True, produce highest quality map.
+        Should only be used for small regions, e.g. cities,
+        Does not make a difference for large regions or NZ-wide maps.
+
+        Currently only affects the topo plotting,
+        where it ensures that the topo grid is aligned
+        with the coastline and water boundaries.
+
+        Increases plotting time.
+    custom_shading_fn : Callable, optional
+        A custom function to modify the topography shading grid.
+        Function takes two arguments: topo_grid and topo_shading_grid,
+        both of type `xr.DataArray`, and should return a modified
+        `xr.DataArray` for the shading grid.
+
+        Only applied if `plot_topo` and `high_quality` are True.
 
     Returns
     -------
@@ -211,6 +284,9 @@ def gen_region_fig(
     .. [0] https://www.pygmt.org/latest/projections/index.html#projections
     .. [1] https://docs.generic-mapping-tools.org/latest/gmt.conf.html
     """
+    # Load NZ map data
+    map_data = NZMapData.load(region=region, high_res_topo=high_res_topo and plot_topo)
+
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
@@ -224,79 +300,18 @@ def gen_region_fig(
             f"+s{subtitle}".replace(" ", r"\040")
         ]
 
-    fig = pygmt.Figure()
+    if fig is None:
+        fig = pygmt.Figure()
 
     if config_options:
         pygmt.config(**config_options)
 
-    fig.basemap(region=region, projection=projection, frame=plot_kwargs["frame_args"])
+    fig.basemap(
+        region=region if region else "NZ",
+        projection=projection,
+        frame=plot_kwargs["frame_args"],
+    )
 
-    # Plots the default coast (sea & inland lakes/rivers)
-    if map_data is None:
-        coast_options = coast_options or {
-            "resolution": "f",
-            "land": "#666666",
-            "water": "skyblue",
-            "shorelines": ["1/0.1p,black", "2/0.1p,black"],
-        }
-        fig.coast(
-            **coast_options,
-        )
-    # Use the custom NZ data
-    else:
-        _draw_map_data(
-            fig,
-            map_data,
-            plot_topo=plot_topo,
-            plot_roads=plot_roads,
-            plot_highways=plot_highways,
-            plot_kwargs=plot_kwargs,
-        )
-
-    return fig
-
-
-def _draw_map_data(
-    fig: pygmt.Figure,
-    map_data: Optional[NZMapData],
-    plot_topo: bool = True,
-    plot_roads: bool = True,
-    plot_highways: bool = True,
-    plot_kwargs: dict[str, str | int] = None,
-) -> None:
-    """Draws map data on a PyGMT figure.
-
-    Parameters
-    ----------
-    fig : pygmt.Figure
-        The PyGMT figure to draw on.
-    map_data : Optional[NZMapData]
-        The map data containing coastline, topography, water, and road networks.
-    plot_topo : bool, optional
-        Whether to plot topographic data. Defaults to True.
-    plot_roads : bool, optional
-        Whether to plot roads. Defaults to True.
-    plot_highways : bool, optional
-        Whether to plot highways. Defaults to True.
-    plot_kwargs : dict[str, str | int], optional
-        A dictionary of plotting options, including:
-
-        - ``"water_color"`` (str): Color for water.
-        - ``"land_color"`` (str): Color for land. This only has a visible effect
-            for very zoomed in maps, where differences between coastline definition
-            and the topo tiles are visible.
-        - ``"coastline_pen_width"`` (str or int): Line width for coastline.
-        - ``"coastline_pen_color"`` (str): Color for coastline.
-        - ``"topo_cmap_min"`` (int): Minimum value for the topography colormap.
-        - ``"topo_cmap_max"`` (int): Maximum value for the topography colormap.
-        - ``"topo_cmap_inc"`` (int): Increment for the topography colormap.
-        - ``"topo_cmap"`` (str): Name of the colormap for topography.
-        - ``"topo_cmap_reverse"`` (bool): Whether to reverse the topography colormap.
-        - ``"road_pen_width"`` (str or int): Line width for roads.
-        - ``"road_pen_color"`` (str): Color for roads.
-        - ``"highway_pen_width"`` (str or int): Line width for highways.
-        - ``"highway_pen_color"`` (str): Color for highways.
-    """
     # Plot coastline and background water
     water_bg = geopandas.GeoSeries(
         geometry.LineString(
@@ -317,24 +332,63 @@ def _draw_map_data(
 
     # Add topo
     if plot_topo:
+        # Drop topo points not on land based on
+        # the coastline and water data.
+        if high_quality and region:
+            topo_points = np.array(
+                list(
+                    itertools.product(
+                        map_data.topo_grid.lat.values, map_data.topo_grid.lon.values
+                    )
+                )
+            )
+            topo_land_mask = on_land(map_data, topo_points, region=region).reshape(
+                map_data.topo_grid.shape
+            )
+            topo_grid = map_data.topo_grid.where(topo_land_mask, np.nan)
+            topo_shading_grid = map_data.topo_shading_grid.where(topo_land_mask, np.nan)
+
+            if custom_shading_fn:
+                topo_shading_grid = custom_shading_fn(topo_grid, topo_shading_grid)
+        # Drop topo points not on land, based on
+        # topo grid elevation.
+        else:
+            # Sanity check
+            assert np.allclose(
+                map_data.topo_grid.lon.values, map_data.topo_shading_grid.lon.values
+            )
+            assert np.allclose(
+                map_data.topo_grid.lat.values, map_data.topo_shading_grid.lat.values
+            )
+
+            mask = map_data.topo_grid >= 0.1
+            topo_grid = map_data.topo_grid.where(mask, np.nan)
+            topo_shading_grid = map_data.topo_shading_grid.reindex_like(
+                topo_grid, method="nearest", tolerance=1e-6
+            )
+            topo_shading_grid = topo_shading_grid.where(mask, np.nan)
+
+        # Create topography colormap
         pygmt.makecpt(
             series=(
                 plot_kwargs["topo_cmap_min"],
                 plot_kwargs["topo_cmap_max"],
                 plot_kwargs["topo_cmap_inc"],
             ),
-            continuous=False,
+            continuous=plot_kwargs["topo_cmap_continous"],
             cmap=plot_kwargs["topo_cmap"],
             reverse=plot_kwargs["topo_cmap_reverse"],
         )
+
+        # Plot topography
         fig.grdimage(
-            grid=map_data.topo_grid,
-            shading=map_data.topo_shading_grid,
+            grid=topo_grid,
+            shading=topo_shading_grid,
             cmap=True,
             nan_transparent=True,
         )
 
-    # Plot water
+    # Plot inland water
     fig.plot(data=map_data.water_df, fill=plot_kwargs["water_color"])
 
     # Add roads
@@ -348,6 +402,8 @@ def _draw_map_data(
             data=map_data.highway_df,
             pen=f"{plot_kwargs['highway_pen_width']}p,{plot_kwargs['highway_pen_color']}",
         )
+
+    return fig
 
 
 def plot_grid(
@@ -477,9 +533,10 @@ def create_grid(
     data_df: pd.DataFrame,
     data_key: str,
     grid_spacing: str = "200e/200e",
-    region: str | tuple[float, float, float, float] = "NZ",
+    region: tuple[float, float, float, float] | None = None,
     interp_method: str = "linear",
     set_water_to_nan: bool = True,
+    high_quality: bool = False,
 ):
     """Generates a regular grid from unstructured data.
 
@@ -494,14 +551,17 @@ def create_grid(
     grid_spacing : str
         Grid spacing specification, using GMT gridding conventions.
         See the spacing parameter of `pygmt.grdlandmask` or the Notes section.
-    region : str or tuple of (float, float, float, float)
-        The region to plot. If a string, it should correspond to a predefined region
-        (e.g., "NZ" for New Zealand). If a tuple, it must be in the format
+    region : tuple of float, optional
+        The region to generate grid for, defined as a tuple of four floats
         (min_lon, max_lon, min_lat, max_lat).
+        If None, then create NZ-wide grid.
     interp_method : str
         The interpolation method to apply between points in `data_df`. Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
     set_water_to_nan : bool
         If True, set water values in the grid to NaN.
+    high_quality : bool, optional
+        If True, use NZ-specific land/water mask for gridding,
+        instead of pygmt.grdlandmask.
 
     Returns
     -------
@@ -518,9 +578,19 @@ def create_grid(
     """
 
     # Create the land/water mask
-    land_mask = pygmt.grdlandmask(
-        region=region, spacing=grid_spacing, maskvalues=[0, 1, 1, 1, 1], resolution="f"
-    )
+    if high_quality and region is not None:
+        land_mask = get_landmask(
+            NZMapData.load(region=region),
+            region,
+            grid_spacing=grid_spacing,
+        )
+    else:
+        land_mask = pygmt.grdlandmask(
+            region=region if region else "NZ",
+            spacing=grid_spacing,
+            maskvalues=[0, 1, 1, 1, 1],
+            resolution="f",
+        )
 
     # Use land/water mask to create meshgrid
     x1, x2 = np.meshgrid(land_mask.lon.values, land_mask.lat.values)
@@ -561,3 +631,130 @@ def create_grid(
         grid.values[~land_mask.astype(bool)] = np.nan
 
     return grid
+
+
+def in_region(region: tuple[float, float, float, float], points: np.ndarray):
+    """
+    Check if points are within the specified region.
+
+    Parameters
+    ----------
+    region : tuple
+        A tuple defining the region as (min_lon, max_lon, min_lat, max_lat).
+    points : np.ndarray
+        An array of points with shape (n_points, 2) where each row is [lon, lat].
+
+    Returns
+    -------
+    np.ndarray
+        A boolean array indicating whether each point is within the region.
+    """
+    min_lon, max_lon, min_lat, max_lat = region
+    lon, lat = points[:, 0], points[:, 1]
+
+    return (lon >= min_lon) & (lon <= max_lon) & (lat >= min_lat) & (lat <= max_lat)
+
+
+def on_land(
+    map_data: NZMapData,
+    points: np.ndarray,
+    region: tuple[float, float, float, float] | None = None,
+):
+    """
+    Checks if the given points are on land based on the
+    `map_data` coastline and water polygons.
+
+    Parameters
+    ----------
+    map_data : NZMapData
+        The map data containing coastline and water polygons.
+    points : np.ndarray
+        An array of points with shape (n_points, 2) where each row is [lat, lon].
+    region : tuple of (float, float, float, float), optional
+        The region of interest, providing this will
+        significantly speed up the check.
+        If None, checks all points against the
+        full NZ coastline and water polygons (slow).
+
+    Returns
+    -------
+    np.ndarray
+        A boolean array of the same length as `points`, where True indicates
+        that the point is on land and False indicates that it is in water.
+    """
+    # Load coastline and water polygons
+    coast_polygon_arrays = [
+        np.array(list(cur_poly.coords))
+        for cur_poly in map_data.coastline_df.values.ravel().tolist()
+    ]
+    water_polygon_arrays = [
+        np.array(list(cur_poly.coords))
+        for cur_poly in map_data.water_df.values.ravel().tolist()
+    ]
+
+    # Filter by region
+    if region is not None:
+        coast_polygon_arrays = [
+            cur_poly_coords
+            for cur_poly_coords in coast_polygon_arrays
+            if np.any(in_region(region, cur_poly_coords))
+        ]
+        water_polygon_arrays = [
+            cur_poly_coords
+            for cur_poly_coords in water_polygon_arrays
+            if np.any(in_region(region, cur_poly_coords))
+        ]
+
+    mask = np.zeros(points.shape[0], dtype=bool)
+    for coast_polygon in coast_polygon_arrays:
+        mask |= point_in_polygon.is_inside_postgis_parallel(
+            points[:, ::-1], coast_polygon
+        )
+    for water_polygon in water_polygon_arrays:
+        mask = np.where(
+            point_in_polygon.is_inside_postgis_parallel(points[:, ::-1], water_polygon),
+            False,
+            mask,
+        )
+
+    return mask
+
+
+def get_landmask(
+    map_data: NZMapData,
+    region: tuple[float, float, float, float],
+    grid_spacing: str = "25e/25e",
+):
+    """
+    Create a land mask grid for the specified region using
+    the given coastline and water data.
+
+    Parameters
+    ----------
+    map_data : NZMapData
+        The map data containing coastline and water polygons.
+    region : tuple of (float, float, float, float)
+        The region to create the land mask for, defined as
+        (min_lon, max_lon, min_lat, max_lat).
+    grid_spacing : str, optional
+        The grid spacing for the land mask.
+        Defaults to 25metres ("25e/25e").
+
+    Returns
+    -------
+    xarray.DataArray
+        A land mask grid where land points are set to 1
+        and water points are set to NaN.
+    """
+    # Create a land mask grid for the specified region and grid spacing.
+    land_mask = pygmt.grdlandmask(region=region, spacing=grid_spacing)
+    land_mask[:] = 1
+
+    # Get grid lat/lon values
+    grid_points = np.array(
+        list(itertools.product(land_mask.lat.values, land_mask.lon.values))
+    )
+    grid_points_mask = on_land(map_data, grid_points, region=region)
+    land_mask[:] = grid_points_mask.reshape(land_mask.shape)
+
+    return land_mask

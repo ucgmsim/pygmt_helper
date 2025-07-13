@@ -1,5 +1,6 @@
 """Plotting functions for generating IM (Intensity Measure) maps and fault trace plots."""
 
+import io
 import multiprocessing as mp
 from collections.abc import Sequence
 from importlib import reload
@@ -10,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pygmt
 from qcore import nhm
+from tqdm import tqdm
 
 from . import plotting
 
@@ -375,3 +377,152 @@ def __gen_im_map(
         hypo_loc=hypo_loc,
     )
     fig.savefig(str(out_ffp), dpi=1200)
+
+
+def disagg_plot(
+    disagg_df: pd.DataFrame,
+    dist_mag_region: tuple[float, float, float, float],
+    category_key: str,
+    category_specs: dict,
+    output_ffp: Path | None = None,
+    plot_kwargs: dict | None = None,
+    verbose: bool = True,
+) -> None:
+    """
+    Creates a 3D disaggregation plot.
+
+    Parameters
+    ----------
+    disagg_df : pd.DataFrame
+        DataFrame containing disaggregation data
+        One row per magnitude/distance/category bin.
+        Required columns:
+        - 'mag': Magnitude of the earthquake.
+        - 'dist': Rupture distance in km.
+        - 'contribution': Contribution to hazard in percentage.
+        - 'dist_bin_width': Width of the distance bin.
+        - 'mag_bin_width': Width of the magnitude bin.
+        - category_key: Category type (e.g. tectonic type or epsilon bin)
+    dist_mag_region : tuple[float, float, float, float]
+        A tuple defining the region for the plot in the format
+        (min_distance, max_distance, min_magnitude, max_magnitude).
+        This defines the x and y axes of the plot.
+    category_key : str
+        The column name in `disagg_df` that specifies the category type,
+        e.g. epsilon or tectonic type.
+    category_specs : dict
+        A dictionary mapping category types to their specifications.
+        Each key corresponds to a category type in `disagg_df[category_key]`,
+        and each value is a tuple containing:
+        - Name of the category (or None for default name).
+        - Color specification for the category (e.g. "blue", "#FF0000").
+
+        Note: There has to be one entry in this dictionary for each unique value
+        in `disagg_df[category_key]`.
+    output_ffp : Path
+        The file path where the plot will be saved.
+    plot_kwargs : dict, optional
+        Additional keyword arguments for the plot.
+        Default values are used if not provided.
+        Valid keys include:
+        - 'width_factor': Factor to scale the width of the bin columns,
+            value has to be between 0 - 1. Default is 0.8.
+        - 'zsize': Size of the z-axis in plot units (e.g. "5c" for 5 cm).
+            Default is "5c".
+        - 'perspective': Perspective of the 3D plot, given as a list of two angles
+            [azimuth, elevation]. Default is [150, 35].
+    verbose : bool, default=True
+        If `True`, prints progress messages during plotting.
+
+    Returns
+    -------
+    None
+        The function saves the plot to `output_ffp` if provided.
+    fig: pygmt.Figure
+        If `output_ffp` is None, the function returns the created figure object.
+    """
+    if len(category_specs) != disagg_df[category_key].nunique():
+        raise ValueError(
+            f"Category specifications do not match unique values in '{category_key}' column. "
+            f"Expected {disagg_df[category_key].nunique()} unique values, got {len(category_specs)}."
+        )
+
+    # Determine maximum value for z-axis (contribution) and tick intervals
+    max_contribution = np.ceil(disagg_df["contribution"].max() / 5) * 5
+    z_major_ticks_interval = max_contribution / 5
+    z_minor_ticks_interval = max_contribution / 10
+
+    # Sort, to ensure correct plotting order
+    disagg_df = disagg_df.sort_values(["mag", "dist"], ascending=(False, True))
+    disagg_bin_groups = disagg_df.groupby(["mag", "dist"], sort=False)
+
+    DEFAULT_PLOT_KWARGS = {
+        "width_factor": 0.8,
+        "zsize": "5c",
+        "perspective": [150, 35],
+    }
+    plot_kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
+
+    # Create the figure
+    region = [
+        dist_mag_region[0],
+        dist_mag_region[1],
+        dist_mag_region[2],
+        dist_mag_region[3],
+        0,
+        max_contribution,
+    ]
+    fig = pygmt.Figure()
+    fig.basemap(
+        region=region,
+        perspective=plot_kwargs["perspective"],
+        zsize=plot_kwargs["zsize"],
+        frame=[
+            "wSnEZ1",
+            "xa50f25+lRupture Distance (km)",
+            "ya0.5f0.25+lMagnitude",
+            f"za{z_major_ticks_interval}f{z_minor_ticks_interval}g{z_major_ticks_interval}+lContribution (%)",
+        ],
+    )
+
+    # Iterate over mag/dist groups
+    for cur_key, cur_group in tqdm(disagg_bin_groups, desc="Plotting disagg bins", disable=not verbose):
+        # Iterate over the category types
+        cur_base = 0
+        for _, cur_row in cur_group.iterrows():
+            if np.isclose(cur_row["contribution"], 0.0):
+                continue
+
+            fig.plot3d(
+                x=cur_row["dist"],
+                y=cur_row["mag"],
+                z=cur_base + cur_row["contribution"],
+                region=region,
+                perspective=plot_kwargs["perspective"],
+                zsize=plot_kwargs["zsize"],
+                style=f"o{cur_row['dist_bin_width'] * plot_kwargs['width_factor']}q/{cur_row['mag_bin_width'] * plot_kwargs['width_factor']}qb{cur_base}",
+                fill=category_specs[cur_row[category_key]][1],
+                pen="black",
+            )
+
+            cur_base += cur_row["contribution"]
+
+    # Create legend specification using StringIO
+    legend_spec = io.StringIO()
+    legend_spec.write("H 14p,Helvetica-Bold Tectonic Region Type\n")
+    legend_spec.write("D 0.1i 1p\n")
+    for k, (name, color) in category_specs.items():
+        name = k if name is None else name
+        legend_spec.write(f"S 0.1i s 0.2i {color} 0.5p 0.3i {name}\n")
+
+    fig.legend(
+        spec=legend_spec,
+        position="n1.0/1.0",
+        box="+gwhite+p1p",
+    )
+
+    if output_ffp:
+        fig.savefig(output_ffp, dpi=900, anti_alias=True)
+    else: 
+        return fig
+        

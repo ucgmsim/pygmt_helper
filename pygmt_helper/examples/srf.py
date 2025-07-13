@@ -11,7 +11,7 @@ from qcore import srf
 
 from pygmt_helper import plotting
 
-output_dir = Path("/path/to/output_dir")
+output_dir = Path("./")
 
 srf_ffp = Path(__file__).parent / "resources" / "Akatarawa.srf"
 
@@ -20,10 +20,6 @@ planes = srf.read_header(str(srf_ffp), idx=True)
 corners = srf.get_bounds(str(srf_ffp), depth=True)
 corners = np.transpose(np.array(corners), (1, 2, 0))
 slip_values = srf.srf2llv_py(str(srf_ffp), value="slip")
-
-# Set map_data to None for faster plotting without topography
-map_data = plotting.NZMapData.load(high_res_topo=False)
-# map_data = None
 
 # Compute colormap limits
 slip_all = np.concatenate([cur_values[:, 2] for cur_values in slip_values])
@@ -36,7 +32,7 @@ region = (
     corners[:, 1, :].min() - 0.25,
     corners[:, 1, :].max() + 0.25,
 )
-fig = plotting.gen_region_fig("Title", region=region, map_data=map_data)
+fig = plotting.gen_region_fig("Title", region=region)
 
 # Process each fault plane
 for ix, (cur_plane, cur_slip) in enumerate(zip(planes, slip_values)):
