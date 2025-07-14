@@ -3,9 +3,10 @@
 import io
 import multiprocessing as mp
 from collections.abc import Sequence
+from enum import StrEnum, auto
 from importlib import reload
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,11 @@ from qcore import nhm
 from tqdm import tqdm
 
 from . import plotting
+
+class DisaggPlotType(StrEnum):
+    """Enum for disaggregation plot types."""
+    TectonicType = "tectonic_type"
+    Epsilon = "epsilon"
 
 
 def im_plot(
@@ -382,10 +388,12 @@ def __gen_im_map(
 def disagg_plot(
     disagg_df: pd.DataFrame,
     dist_mag_region: tuple[float, float, float, float],
+    plot_type: DisaggPlotType,
     category_key: str,
     category_specs: dict,
     output_ffp: Path | None = None,
     plot_kwargs: dict | None = None,
+    config_options: dict[str, Any] = None,
     verbose: bool = True,
 ) -> None:
     """
@@ -421,6 +429,9 @@ def disagg_plot(
         in `disagg_df[category_key]`.
     output_ffp : Path
         The file path where the plot will be saved.
+    config_options : dict, optional
+        Configuration options to apply to the figure. See the GMT configuration
+        documentation [1]_ for available options.
     plot_kwargs : dict, optional
         Additional keyword arguments for the plot.
         Default values are used if not provided.
@@ -431,6 +442,14 @@ def disagg_plot(
             Default is "5c".
         - 'perspective': Perspective of the 3D plot, given as a list of two angles
             [azimuth, elevation]. Default is [150, 35].
+        - 'dist_major_tick': Major tick interval for the distance axis in km.
+            Default is 50 km.
+        - 'dist_minor_tick': Minor tick interval for the distance axis in km.
+            Default is 25 km.
+        - 'mag_major_tick': Major tick interval for the magnitude axis.
+            Default is 0.5.
+        - 'mag_minor_tick': Minor tick interval for the magnitude axis.
+            Default is 0.25.
     verbose : bool, default=True
         If `True`, prints progress messages during plotting.
 
@@ -440,6 +459,11 @@ def disagg_plot(
         The function saves the plot to `output_ffp` if provided.
     fig: pygmt.Figure
         If `output_ffp` is None, the function returns the created figure object.
+
+    References
+    ----------
+    .. [0] https://www.pygmt.org/latest/projections/index.html#projections
+    .. [1] https://docs.generic-mapping-tools.org/latest/gmt.conf.html
     """
     if len(category_specs) != disagg_df[category_key].nunique():
         raise ValueError(
@@ -447,21 +471,31 @@ def disagg_plot(
             f"Expected {disagg_df[category_key].nunique()} unique values, got {len(category_specs)}."
         )
 
-    # Determine maximum value for z-axis (contribution) and tick intervals
-    max_contribution = np.ceil(disagg_df["contribution"].max() / 5) * 5
-    z_major_ticks_interval = max_contribution / 5
-    z_minor_ticks_interval = max_contribution / 10
-
     # Sort, to ensure correct plotting order
     disagg_df = disagg_df.sort_values(["mag", "dist"], ascending=(False, True))
     disagg_bin_groups = disagg_df.groupby(["mag", "dist"], sort=False)
+
+    # Determine maximum value for z-axis (contribution) and tick intervals
+    max_contribution = np.ceil(disagg_bin_groups["contribution"].sum().max() / 5) * 5
+    z_major_ticks_interval = max_contribution / 5
+    z_minor_ticks_interval = max_contribution / 10
 
     DEFAULT_PLOT_KWARGS = {
         "width_factor": 0.8,
         "zsize": "5c",
         "perspective": [150, 35],
+        "dist_major_tick": 50,      
+        "dist_minor_tick": 25,      
+        "mag_major_tick": 0.5,      
+        "mag_minor_tick": 0.25,     
     }
     plot_kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
+
+    config_options = {
+        "MAP_GRID_PEN_PRIMARY": "0.5p,black,-",
+    }
+    if config_options:
+        pygmt.config(**config_options)
 
     # Create the figure
     region = [
@@ -479,8 +513,8 @@ def disagg_plot(
         zsize=plot_kwargs["zsize"],
         frame=[
             "wSnEZ1",
-            "xa50f25+lRupture Distance (km)",
-            "ya0.5f0.25+lMagnitude",
+            f"xa{plot_kwargs['dist_major_tick']}f{plot_kwargs['dist_minor_tick']}g{plot_kwargs['dist_major_tick']}+lRupture Distance (km)",
+            f"ya{plot_kwargs['mag_major_tick']}f{plot_kwargs['mag_minor_tick']}g{plot_kwargs['mag_major_tick']}+lMagnitude",
             f"za{z_major_ticks_interval}f{z_minor_ticks_interval}g{z_major_ticks_interval}+lContribution (%)",
         ],
     )
@@ -509,7 +543,10 @@ def disagg_plot(
 
     # Create legend specification using StringIO
     legend_spec = io.StringIO()
-    legend_spec.write("H 14p,Helvetica-Bold Tectonic Region Type\n")
+    if plot_type == DisaggPlotType.TectonicType:
+        legend_spec.write("H 14p,Helvetica-Bold Tectonic Region Type\n")
+    elif plot_type == DisaggPlotType.Epsilon:
+        legend_spec.write("H 14p,Helvetica-Bold Epsilon\n")
     legend_spec.write("D 0.1i 1p\n")
     for k, (name, color) in category_specs.items():
         name = k if name is None else name
@@ -517,7 +554,7 @@ def disagg_plot(
 
     fig.legend(
         spec=legend_spec,
-        position="n1.0/1.0",
+        position="n1.0/1.0+jTL",
         box="+gwhite+p1p",
     )
 
