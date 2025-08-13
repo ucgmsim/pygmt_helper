@@ -316,10 +316,10 @@ def gen_region_fig(
     water_bg = geopandas.GeoSeries(
         geometry.LineString(
             [
-                (fig.region[0], fig.region[2]),
-                (fig.region[1], fig.region[2]),
-                (fig.region[1], fig.region[3]),
-                [fig.region[0], fig.region[3]],
+                (region[0], region[2]),
+                (region[1], region[2]),
+                (region[1], region[3]),
+                [region[0], region[3]],
             ]
         )
     )
