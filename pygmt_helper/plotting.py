@@ -313,13 +313,14 @@ def gen_region_fig(
     )
 
     # Plot coastline and background water
+    bg_region = region if region else fig.region
     water_bg = geopandas.GeoSeries(
         geometry.LineString(
             [
-                (fig.region[0], fig.region[2]),
-                (fig.region[1], fig.region[2]),
-                (fig.region[1], fig.region[3]),
-                [fig.region[0], fig.region[3]],
+                (bg_region[0], bg_region[2]),
+                (bg_region[1], bg_region[2]),
+                (bg_region[1], bg_region[3]),
+                [bg_region[0], bg_region[3]],
             ]
         )
     )
