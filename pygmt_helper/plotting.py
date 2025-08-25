@@ -300,7 +300,7 @@ def gen_region_fig(
             f"+s{subtitle}".replace(" ", r"\040")
         ]
 
-    config_options =  {'COLOR_NAN': plot_kwargs['water_color']} | (config_options or {})
+    config_options = {'COLOR_NAN': plot_kwargs['water_color']} | (config_options or {})
     pygmt.config(**config_options)
 
     if fig is None:
