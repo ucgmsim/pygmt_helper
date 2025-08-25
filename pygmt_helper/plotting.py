@@ -290,6 +290,7 @@ def gen_region_fig(
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
+
     if title:
         plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
             f"+t{title}".replace(" ", r"\040")
@@ -300,31 +301,21 @@ def gen_region_fig(
             f"+s{subtitle}".replace(" ", r"\040")
         ]
 
+    config_options =  {'COLOR_NAN': plot_kwargs['water_color']} | (config_options or {})
+    pygmt.config(**config_options)
+
     if fig is None:
         fig = pygmt.Figure()
 
-    if config_options:
-        pygmt.config(**config_options)
-
+    water_color = plot_kwargs['water_color']
+    plot_kwargs['frame_args'] = plot_kwargs.get('frame_args', []) + [f'+g{water_color}']
     fig.basemap(
         region=region if region else "NZ",
         projection=projection,
         frame=plot_kwargs["frame_args"],
     )
 
-    # Plot coastline and background water
-    bg_region = region if region else fig.region
-    water_bg = geopandas.GeoSeries(
-        geometry.LineString(
-            [
-                (bg_region[0], bg_region[2]),
-                (bg_region[1], bg_region[2]),
-                (bg_region[1], bg_region[3]),
-                [bg_region[0], bg_region[3]],
-            ]
-        )
-    )
-    fig.plot(water_bg, fill=plot_kwargs["water_color"], straight_line=True)
+    # Plot coastline
     fig.plot(
         data=map_data.coastline_df,
         pen=f"{plot_kwargs['coastline_pen_width']}p,{plot_kwargs['coastline_pen_color']}",
@@ -379,6 +370,7 @@ def gen_region_fig(
             continuous=plot_kwargs["topo_cmap_continous"],
             cmap=plot_kwargs["topo_cmap"],
             reverse=plot_kwargs["topo_cmap_reverse"],
+            no_bg=True
         )
 
         # Plot topography
@@ -386,7 +378,6 @@ def gen_region_fig(
             grid=topo_grid,
             shading=topo_shading_grid,
             cmap=True,
-            nan_transparent=True,
         )
 
     # Plot inland water
