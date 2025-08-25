@@ -13,7 +13,6 @@ import pooch
 import pygmt
 import xarray as xr
 from scipy import interpolate
-from shapely import geometry
 from qcore import point_in_polygon
 
 GMT_DATA = pooch.create(
