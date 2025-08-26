@@ -289,7 +289,6 @@ def gen_region_fig(
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
-
     if title:
         plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
             f"+t{title}".replace(" ", r"\040")
@@ -300,14 +299,14 @@ def gen_region_fig(
             f"+s{subtitle}".replace(" ", r"\040")
         ]
 
-    config_options =  {'COLOR_NAN': plot_kwargs['water_color']} | (config_options or {})
+    config_options = {"COLOR_NAN": plot_kwargs["water_color"]} | (config_options or {})
     pygmt.config(**config_options)
 
     if fig is None:
         fig = pygmt.Figure()
 
-    water_color = plot_kwargs['water_color']
-    plot_kwargs['frame_args'] = plot_kwargs.get('frame_args', []) + [f'+g{water_color}']
+    water_color = plot_kwargs["water_color"]
+    plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [f"+g{water_color}"]
     fig.basemap(
         region=region if region else "NZ",
         projection=projection,
@@ -369,7 +368,9 @@ def gen_region_fig(
             continuous=plot_kwargs["topo_cmap_continous"],
             cmap=plot_kwargs["topo_cmap"],
             reverse=plot_kwargs["topo_cmap_reverse"],
-            no_bg=True
+            # Some CPTs define their own COLOR_NAN, but we wish to use the
+            # water colour
+            no_bg=True,
         )
 
         # Plot topography
