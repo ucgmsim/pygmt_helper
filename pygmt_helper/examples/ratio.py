@@ -34,16 +34,22 @@ df["ratio"] = np.random.uniform(-0.5, 0.5, df.shape[0])
 fig = plotting.gen_region_fig("Ratio")
 
 # Compute the interpolated grid
-grid = plotting.create_grid(df, "ratio")
+# Use a large grid resolution for the whole country.
+grid = plotting.create_grid(df, "ratio", grid_spacing="1000e/1000e")
 
 # Plot the grid
 plotting.plot_grid(
-    fig, grid, "polar", (-0.5, 0.5, 1.0 / 16), ("darkred", "darkblue"), transparency=35
+    fig,
+    grid,
+    "polar",
+    (-0.5, 0.5, 1.0 / 16),
+    ("darkred", "darkblue"),
+    transparency=35,
+    plot_contours=False,
 )
 
 # Save the figure
 fig.savefig(
-    output_dir / f"ratio.png",
-    dpi=900,
+    output_dir / f"ratio.jpeg",
     anti_alias=True,
 )
