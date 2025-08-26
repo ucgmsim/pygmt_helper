@@ -289,14 +289,6 @@ def gen_region_fig(
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
-    if title:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [f"+t{title}"]
-
-    if subtitle:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
-            f"+s{subtitle}"
-        ]
-
     config_options = {"COLOR_NAN": plot_kwargs["water_color"]} | (config_options or {})
     pygmt.config(**config_options)
 
@@ -310,6 +302,15 @@ def gen_region_fig(
         projection=projection,
         frame=plot_kwargs["frame_args"],
     )
+
+    title_args = []
+    if title:
+        title_args.append(f"+t{title}")
+    if subtitle:
+        title_args.append(f"+s{subtitle}")
+
+    if title:
+        fig.basemap(frame=title_args)
 
     # Plot coastline
     fig.plot(
