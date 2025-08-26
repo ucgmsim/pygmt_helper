@@ -290,13 +290,11 @@ def gen_region_fig(
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
     if title:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
-            f"+t{title}".replace(" ", r"\040")
-        ]
+        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [f"+t{title}"]
 
     if subtitle:
         plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
-            f"+s{subtitle}".replace(" ", r"\040")
+            f"+s{subtitle}"
         ]
 
     config_options = {"COLOR_NAN": plot_kwargs["water_color"]} | (config_options or {})
