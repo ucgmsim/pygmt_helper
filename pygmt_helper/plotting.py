@@ -583,6 +583,11 @@ def create_grid(
     - To define a fixed number of gridlines: `"{x}+n/{x}+n"`,
       where `x` is the number of gridlines.
     """
+    if region is not None and not grid_spacing:
+        grid_scale = grid_scale_for_region(region)
+        grid_spacing = f"{grid_scale}e/{grid_scale}e"
+    elif not grid_spacing:
+        grid_spacing = "200e/200e"
 
     # Create the land/water mask
     if high_quality and region is not None:
@@ -599,9 +604,6 @@ def create_grid(
             resolution="f",
         )
 
-    if region is not None and not grid_spacing:
-        grid_scale = grid_scale_for_region(region)
-        grid_spacing = f"{grid_scale}e/{grid_scale}e"
     # Use land/water mask to create meshgrid
     x1, x2 = np.meshgrid(land_mask.lon.values, land_mask.lat.values)
 
