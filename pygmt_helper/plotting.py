@@ -1077,7 +1077,7 @@ def plot_geometry(
     geometry : shapely.Geometry
         Geometry to plot.
     crs : str or None
-        The CRS of the polygon, if applicable.
+        The CRS of the geometry, if applicable.
     **kwargs
         Additional arguments to pass to `pygmt.Figure.plot`.
 
