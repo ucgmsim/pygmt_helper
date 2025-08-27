@@ -5,7 +5,6 @@ pyarrow
 pygmt
 xarray
 scipy
-shapely
 qcore @ git+https://github.com/ucgmsim/qcore.git
 pytest
 pytest-cov

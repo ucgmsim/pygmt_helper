@@ -1,10 +1,10 @@
 """Plotting tools to generate basemaps, grids and contours with PyGMT."""
 
-import itertools
 import copy
+import itertools
 import tempfile
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Self, Callable
+from typing import Any, Callable, NamedTuple, Optional, Self
 
 import geopandas
 import numpy as np
@@ -12,9 +12,8 @@ import pandas as pd
 import pooch
 import pygmt
 import xarray as xr
-from scipy import interpolate
-from shapely import geometry
 from qcore import point_in_polygon
+from scipy import interpolate
 
 GMT_DATA = pooch.create(
     pooch.os_cache("pygmt_helper"),
@@ -290,41 +289,30 @@ def gen_region_fig(
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
 
-    if title:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
-            f"+t{title}".replace(" ", r"\040")
-        ]
-
-    if subtitle:
-        plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [
-            f"+s{subtitle}".replace(" ", r"\040")
-        ]
+    if config_options:
+        pygmt.config(**config_options)
 
     if fig is None:
         fig = pygmt.Figure()
 
-    if config_options:
-        pygmt.config(**config_options)
-
+    water_color = plot_kwargs["water_color"]
+    plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [f"+g{water_color}"]
     fig.basemap(
         region=region if region else "NZ",
         projection=projection,
         frame=plot_kwargs["frame_args"],
     )
 
-    # Plot coastline and background water
-    bg_region = region if region else fig.region
-    water_bg = geopandas.GeoSeries(
-        geometry.LineString(
-            [
-                (bg_region[0], bg_region[2]),
-                (bg_region[1], bg_region[2]),
-                (bg_region[1], bg_region[3]),
-                [bg_region[0], bg_region[3]],
-            ]
-        )
-    )
-    fig.plot(water_bg, fill=plot_kwargs["water_color"], straight_line=True)
+    title_args = []
+    if title:
+        title_args.append(f"+t{title}")
+    if subtitle:
+        title_args.append(f"+s{subtitle}")
+
+    if title:
+        fig.basemap(frame=title_args)
+
+    # Plot coastline
     fig.plot(
         data=map_data.coastline_df,
         pen=f"{plot_kwargs['coastline_pen_width']}p,{plot_kwargs['coastline_pen_color']}",
@@ -370,24 +358,27 @@ def gen_region_fig(
             topo_shading_grid = topo_shading_grid.where(mask, np.nan)
 
         # Create topography colormap
-        pygmt.makecpt(
-            series=(
-                plot_kwargs["topo_cmap_min"],
-                plot_kwargs["topo_cmap_max"],
-                plot_kwargs["topo_cmap_inc"],
-            ),
-            continuous=plot_kwargs["topo_cmap_continous"],
-            cmap=plot_kwargs["topo_cmap"],
-            reverse=plot_kwargs["topo_cmap_reverse"],
-        )
+        with pygmt.config(COLOR_NAN=plot_kwargs["water_color"]):
+            pygmt.makecpt(
+                series=(
+                    plot_kwargs["topo_cmap_min"],
+                    plot_kwargs["topo_cmap_max"],
+                    plot_kwargs["topo_cmap_inc"],
+                ),
+                continuous=plot_kwargs["topo_cmap_continous"],
+                cmap=plot_kwargs["topo_cmap"],
+                reverse=plot_kwargs["topo_cmap_reverse"],
+                # Some CPTs define their own COLOR_NAN, but we wish to use the
+                # water colour
+                no_bg=True,
+            )
 
-        # Plot topography
-        fig.grdimage(
-            grid=topo_grid,
-            shading=topo_shading_grid,
-            cmap=True,
-            nan_transparent=True,
-        )
+            # Plot topography
+            fig.grdimage(
+                grid=topo_grid,
+                shading=topo_shading_grid,
+                cmap=True,
+            )
 
     # Plot inland water
     fig.plot(data=map_data.water_df, fill=plot_kwargs["water_color"])
@@ -413,7 +404,7 @@ def plot_grid(
     cmap: str,
     cmap_limits: tuple[float, float, float],
     cmap_limit_colors: tuple[str, str],
-    cb_label: str = None,
+    cb_label: str | None = None,
     reverse_cmap: bool = False,
     log_cmap: bool = False,
     transparency: float = 0.0,
