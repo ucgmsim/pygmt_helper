@@ -846,7 +846,7 @@ def _segment_at_point_on_polygon(
 
     Returns
     -------
-    segment : tuple of shapely.Point
+    tuple of shapely.Point
         The start and end points of the segment containing the point
         corresponding to t. Returns None if polygon has fewer than 2
         points, or t corresponds to a vertex.
@@ -981,10 +981,10 @@ def label_polygon_at(
         Polygon to label.
     label : str
         Label to add.
-    projection : str or None, optional
-        If provided, use the projection to calculate alignment angle.
     align : bool, optional
         If True, align the angle of the label with the polygon.
+    projection : str or None, optional
+        If provided, use the projection to calculate alignment angle.
     **kwargs
         Additional arguments to pass to `pygmt.Figure.text`.
     """
