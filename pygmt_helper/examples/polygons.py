@@ -46,7 +46,7 @@ test_polygon = shapely.Polygon(
 )
 
 
-plotting.plot_geometry(fig, test_polygon, pen='1p,blue,-')
+plotting.plot_geometry(fig, test_polygon, pen='1p,blue,-', crs='4326')
 plotting.label_polygon_on_boundary(fig, test_polygon, 'Outside!', align=True, projection=projection, fill='white', pen='1p,black', offset='0.3c')
 plotting.label_geometry_inside(fig, test_polygon, 'Inside!', fill='white', pen='1p,black')
 plotting.label_polygon_at(fig, 0.35, test_polygon, 'Around!', align=True, projection=projection, fill='white', pen='1p,black', offset='0.3c', justify='TC')

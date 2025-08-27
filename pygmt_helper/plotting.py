@@ -1073,10 +1073,8 @@ def label_geometry_inside(
 
 def plot_geometry(
     fig: pygmt.Figure,
-    polygon: shapely.LineString
-    | shapely.MultiLineString
-    | shapely.Polygon
-    | shapely.MultiPolygon,
+    polygon: shapely.Geometry,
+    crs: str | None = None,
     **kwargs,
 ) -> None:
     """Plot a geometry on a pygmt figure.
@@ -1087,6 +1085,8 @@ def plot_geometry(
         Figure to plot on.
     polygon : polygon, linestring, or collection of polygons or linestrings
         Geometry to plot.
+    crs : str or None
+        The CRS of the polygon, if applicable.
     **kwargs
         Additional arguments to pass to `pygmt.Figure.plot`.
 
@@ -1098,24 +1098,8 @@ def plot_geometry(
     >>> polygon = shapely.geometry.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
     >>> plot_geometry(fig, polygon, pen="1p,blue,-")
     """
-
-    if isinstance(polygon, shapely.MultiPolygon | shapely.MultiLineString):
-        for part in polygon.geoms:
-            plot_geometry(fig, part, **kwargs)
-    elif isinstance(polygon, shapely.LineString):
-        coords = np.array(polygon.coords)
-        fig.plot(
-            x=coords[:, 0],
-            y=coords[:, 1],
-            **kwargs,
-        )
-    else:
-        polygon_coords = np.array(polygon.exterior.coords)
-        fig.plot(
-            x=polygon_coords[:, 0],
-            y=polygon_coords[:, 1],
-            **kwargs,
-        )
+    gdf = geopandas.GeoDataFrame(geometry=[polygon], crs=crs)
+    fig.plot(gdf, **kwargs)
 
 
 def grid_scale_for_region(region: tuple[float, float, float, float]) -> int:
