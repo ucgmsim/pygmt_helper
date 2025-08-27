@@ -832,43 +832,6 @@ def polygon_nztm_to_pygmt(polygon: shapely.Polygon) -> shapely.Polygon:
     )
 
 
-def _point_on_polygon(t: float, polygon: shapely.Polygon) -> shapely.Point:
-    """Maps t between 0 and 1 (inclusive) to a point on the polygon boundary.
-
-    Parameters
-    ----------
-    t : float
-        Value between 0 and 1 (inclusive).
-    polygon : shapely.Polygon
-        Polygon to find point on.
-
-    Returns
-    -------
-    shapely.Point
-        Point on the polygon boundary.
-    """
-    boundary = polygon.exterior
-    length = boundary.length
-    target_length = t * length
-    accumulated_length = 0
-
-    for i in range(len(boundary.coords) - 1):
-        p1 = shapely.Point(boundary.coords[i])
-        p2 = shapely.Point(boundary.coords[i + 1])
-        segment_length = p1.distance(p2)
-
-        if accumulated_length + segment_length >= target_length:
-            # Interpolate along this segment
-            ratio = (target_length - accumulated_length) / segment_length
-            x = p1.x + ratio * (p2.x - p1.x)
-            y = p1.y + ratio * (p2.y - p1.y)
-            return shapely.Point(x, y)
-
-        accumulated_length += segment_length
-
-    return shapely.Point(boundary.coords[-1])
-
-
 def _segment_at_point_on_polygon(
     t: float, polygon: shapely.Polygon
 ) -> tuple[shapely.Point, shapely.Point] | None:
@@ -937,7 +900,7 @@ def _hausdorff_maximisation(
     """
 
     def objective(t: float) -> float:  # numpydoc ignore=GL08
-        point = _point_on_polygon(t, polygon)
+        point = polygon.exterior.interpolate(t, normalized=True)
         return -point.distance(other_geom.exterior)  # Negative because we maximize
 
     result = sp.optimize.minimize_scalar(objective, bounds=(0, 1), method="bounded")
@@ -1023,7 +986,7 @@ def label_polygon_at(
     **kwargs
         Additional arguments to pass to `pygmt.Figure.text`.
     """
-    point = _point_on_polygon(t, polygon)
+    point = polygon.exterior.interpolate(t, normalized=True)
 
     angle = None
     if align and projection:
