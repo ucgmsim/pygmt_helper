@@ -1028,8 +1028,6 @@ def label_polygon_on_boundary(
     ----------
     fig : pygmt.Figure
         Figure to plot on.
-    region : tuple of floats
-        Region to plot.
     polygon : shapely.Polygon
         Polygon to label.
     label : str
@@ -1062,8 +1060,6 @@ def label_geometry_inside(
         Geometry to label.
     label : str
         Label to add.
-    align : bool, optional
-        If True, align the angle of the label with the polygon.
     **kwargs
         Additional arguments to pass to `pygmt.Figure.text`.
     """
@@ -1096,7 +1092,7 @@ def plot_geometry(
     >>> import shapely.geometry
     >>> fig = pygmt.Figure()
     >>> polygon = shapely.geometry.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    >>> plot_polygon(fig, polygon, pen="1p,blue,-")
+    >>> plot_geometry(fig, polygon, pen="1p,blue,-")
     """
 
     if isinstance(polygon, shapely.MultiPolygon | shapely.MultiLineString):
