@@ -1175,3 +1175,24 @@ def grid_scale_for_region(region: tuple[float, float, float, float]) -> int:
     lon_km = (max_lon - min_lon) * 111 * np.cos(np.radians((min_lat + max_lat) / 2))
     maximum_extent = max(lat_km, lon_km)
     return int(round(max(5, 2.5 * maximum_extent)))
+
+
+def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArray:
+    """Clip a grid to mask points outside `geometry`.
+
+    Parameters
+    ----------
+    geometry : shapely.Geometry
+        The geometry to clip the grid to.
+    grid : xr.DataArray
+        The gridded data. Usually created from `create_grid`.
+
+    Returns
+    -------
+    xr.DataArray
+        A new data array with contents of grid inside the geometry and NaN outside the geometry.
+    """
+    lon, lat = np.meshgrid(grid.longitude.values, grid.latitude.values)
+
+    mask = shapely.contains_xy(geometry, lon.ravel(), lat.ravel()).reshape(lon.shape)
+    return grid.where(mask)
