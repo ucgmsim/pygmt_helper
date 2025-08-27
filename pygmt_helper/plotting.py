@@ -792,33 +792,33 @@ def nztm_to_wgs_wraparound(coords: np.ndarray) -> np.ndarray:
     return coords
 
 
-def polygon_nztm_to_pygmt(polygon: shapely.Polygon) -> shapely.Polygon:
-    """Convert a polygon from NZTM to WGS84, wrapping around the international date line for PyGMT.
+def geometry_nztm_to_pygmt(geometry: shapely.Geometry) -> shapely.Geometry:
+    """Convert a geometry from NZTM to WGS84, wrapping around the international date line for PyGMT.
 
     Parameters
     ----------
-    polygon : shapely.Polygon
-        Polygon to convert.
+    geometry : shapely.Geometry
+        Geometry to convert.
 
     Returns
     -------
-    shapely.Polygon
-        Converted polygon.
+    shapely.Geometry
+        Converted geometry.
 
     Examples
     --------
     >>> import shapely
     >>> p = shapely.Point(5238700.07489416, 1518491.35216903)
-    >>> polygon_nztm_to_pygmt(p)
+    >>> geometry_nztm_to_pygmt(p)
     <POINT (172 -43)>
     >>> q = shapely.Point(*coordinates.wgs_depth_to_nztm(np.array([-43, 181])))
-    >>> polygon_nztm_to_pygmt(q)
+    >>> geometry_nztm_to_pygmt(q)
     <POINT (181 -43)>
     >>> # Note that the coordinates would be negative if coordinates
     >>> # were not wrapped around the international date line.
     """
     return shapely.transform(
-        polygon,
+        geometry,
         lambda x: nztm_to_wgs_wraparound(x),
     )
 
@@ -875,7 +875,7 @@ def _hausdorff_maximisation(
     polygon : shapely.Polygon
         Polygon to find point on.
     other_geom : shapely.Polygon
-        Other geometry to maximize distance to.
+        geometry to maximize distance to.
 
     Returns
     -------
@@ -914,7 +914,7 @@ def _gmt_to_pyproj(
     ----------
     gmt_proj : str
         GMT projection string, e.g., 'M10c', 'X15c/10c'
-    region : list, optional
+    region : tuple of float, optional
         Map region. Needed for some projections.
 
     Returns
@@ -1064,7 +1064,7 @@ def label_geometry_inside(
 
 def plot_geometry(
     fig: pygmt.Figure,
-    polygon: shapely.Geometry,
+    geometry: shapely.Geometry,
     crs: str | None = None,
     **kwargs,
 ) -> None:
@@ -1074,7 +1074,7 @@ def plot_geometry(
     ----------
     fig : pygmt.Figure
         Figure to plot on.
-    polygon : polygon, linestring, or collection of polygons or linestrings
+    geometry : shapely.Geometry
         Geometry to plot.
     crs : str or None
         The CRS of the polygon, if applicable.
@@ -1089,7 +1089,7 @@ def plot_geometry(
     >>> polygon = shapely.geometry.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
     >>> plot_geometry(fig, polygon, pen="1p,blue,-")
     """
-    gdf = geopandas.GeoDataFrame(geometry=[polygon], crs=crs)
+    gdf = geopandas.GeoDataFrame(geometry=[geometry], crs=crs)
     fig.plot(gdf, **kwargs)
 
 
