@@ -1,13 +1,15 @@
 numpy
 pandas
 geopandas>1.0
-pyarrow 
+pyarrow
 pygmt
+pyproj
 xarray
 scipy
+shapely
 qcore @ git+https://github.com/ucgmsim/qcore.git
 pytest
 pytest-cov
 pooch
 tqdm
-netcdf4 
+netcdf4

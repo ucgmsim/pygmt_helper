@@ -2,6 +2,7 @@
 
 import copy
 import itertools
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Optional, Self
@@ -11,8 +12,11 @@ import numpy as np
 import pandas as pd
 import pooch
 import pygmt
+import scipy as sp
+import shapely
 import xarray as xr
-from qcore import point_in_polygon
+from pyproj import Proj
+from qcore import coordinates, point_in_polygon
 from scipy import interpolate
 
 GMT_DATA = pooch.create(
@@ -524,7 +528,7 @@ def plot_grid(
 def create_grid(
     data_df: pd.DataFrame,
     data_key: str,
-    grid_spacing: str = "200e/200e",
+    grid_spacing: str | None = None,
     region: tuple[float, float, float, float] | None = None,
     interp_method: str = "linear",
     set_water_to_nan: bool = True,
@@ -540,9 +544,11 @@ def create_grid(
         (referred to as `data_key`).
     data_key : str
         The column name in `data_df` containing the data values.
-    grid_spacing : str
+    grid_spacing : str or None
         Grid spacing specification, using GMT gridding conventions.
-        See the spacing parameter of `pygmt.grdlandmask` or the Notes section.
+        See the spacing parameter of `pygmt.grdlandmask` or the Notes
+        section. If none, will use a grid-scale inferred from the
+        region.
     region : tuple of float, optional
         The region to generate grid for, defined as a tuple of four floats
         (min_lon, max_lon, min_lat, max_lat).
@@ -568,6 +574,11 @@ def create_grid(
     - To define a fixed number of gridlines: `"{x}+n/{x}+n"`,
       where `x` is the number of gridlines.
     """
+    if region is not None and not grid_spacing:
+        grid_scale = grid_scale_for_region(region)
+        grid_spacing = f"{grid_scale}e/{grid_scale}e"
+    elif not grid_spacing:
+        grid_spacing = "200e/200e"
 
     # Create the land/water mask
     if high_quality and region is not None:
@@ -750,3 +761,378 @@ def get_landmask(
     land_mask[:] = grid_points_mask.reshape(land_mask.shape)
 
     return land_mask
+
+
+def nztm_to_wgs_wraparound(coords: np.ndarray) -> np.ndarray:
+    """Convert NZTM coordinates to WGS84, wrapping around the international date line for PyGMT.
+
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        NZTM coordinates to convert.
+
+    Returns
+    -------
+    np.ndarray
+        WGS84 coordinates, wrapped around the international date line.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> coords = np.array([5238700.07489416, 1518491.35216903])
+    >>> nztm_to_wgs_wraparound(coords)
+    array([172.0, -43.0])
+    >>> coords = np.array(coordinates.wgs_depth_to_nztm(np.array([-43, 181])))
+    >>> nztm_to_wgs_wraparound(coords)
+    array([181.0, -43.0])
+    """
+    coords = coordinates.nztm_to_wgs_depth(coords)[:, ::-1]
+    coords[coords[:, 0] < 0, 0] += 360
+    return coords
+
+
+def geometry_nztm_to_pygmt(geometry: shapely.Geometry) -> shapely.Geometry:
+    """Convert a geometry from NZTM to WGS84, wrapping around the international date line for PyGMT.
+
+    Parameters
+    ----------
+    geometry : shapely.Geometry
+        Geometry to convert.
+
+    Returns
+    -------
+    shapely.Geometry
+        Converted geometry.
+
+    Examples
+    --------
+    >>> import shapely
+    >>> p = shapely.Point(5238700.07489416, 1518491.35216903)
+    >>> geometry_nztm_to_pygmt(p)
+    <POINT (172 -43)>
+    >>> q = shapely.Point(*coordinates.wgs_depth_to_nztm(np.array([-43, 181])))
+    >>> geometry_nztm_to_pygmt(q)
+    <POINT (181 -43)>
+    >>> # Note that the coordinates would be negative if coordinates
+    >>> # were not wrapped around the international date line.
+    """
+    return shapely.transform(
+        geometry,
+        lambda x: nztm_to_wgs_wraparound(x),
+    )
+
+
+def _segment_at_point_on_polygon(
+    t: float, polygon: shapely.Polygon
+) -> tuple[shapely.Point, shapely.Point] | None:
+    """Maps t between 0 and 1 (inclusive) to a segment on the polygon boundary.
+
+    Parameters
+    ----------
+    t : float
+        Value between 0 and 1 (inclusive).
+    polygon : shapely.Polygon
+        Polygon to find segment on.
+
+    Returns
+    -------
+    tuple of shapely.Point
+        The start and end points of the segment containing the point
+        corresponding to t. Returns None if polygon has fewer than 2
+        points, or t corresponds to a vertex.
+    """
+    boundary = polygon.exterior
+    if len(boundary.coords) < 2:
+        return None
+
+    length = boundary.length
+    target_length = t * length
+    accumulated_length = 0
+
+    for i in range(len(boundary.coords) - 1):
+        if np.isclose(accumulated_length, target_length):
+            return None
+        p1 = shapely.Point(boundary.coords[i])
+        p2 = shapely.Point(boundary.coords[i + 1])
+        segment_length = p1.distance(p2)
+
+        if accumulated_length + segment_length >= target_length:
+            return p1, p2
+
+        accumulated_length += segment_length
+
+    return None
+
+
+def _hausdorff_maximisation(
+    polygon: shapely.Polygon, other_geom: shapely.Polygon
+) -> tuple[float, float]:
+    """Finds the point on polygon maximizing the distance to other_geom.
+
+    Parameters
+    ----------
+    polygon : shapely.Polygon
+        Polygon to find point on.
+    other_geom : shapely.Polygon
+        geometry to maximize distance to.
+
+    Returns
+    -------
+    float
+        Point parameter (t) representing the point on the polygon
+        boundary maximising the distance to other_geom.
+    float
+        The distance between the maximal point and `other_geom`
+
+    See Also
+    --------
+    shapely.hausdorff_distance : Computes the Hausdorff distance between two geometries.
+    """
+
+    def objective(t: float) -> float:  # numpydoc ignore=GL08
+        point = polygon.exterior.interpolate(t, normalized=True)
+        return -point.distance(other_geom.exterior)  # Negative because we maximize
+
+    result = sp.optimize.minimize_scalar(objective, bounds=(0, 1), method="bounded")
+    if result.success:
+        return (
+            result.x,
+            -result.fun,
+        )
+    else:
+        raise RuntimeError("Optimisation failed")
+
+
+def _gmt_to_pyproj(
+    gmt_proj: str, region: tuple[float, float, float, float] | None = None
+) -> Callable[[float, float], tuple[float, float]]:
+    """
+    Convert a GMT projection string to a PyProj CRS.
+
+    Parameters
+    ----------
+    gmt_proj : str
+        GMT projection string, e.g., 'M10c', 'X15c/10c'
+    region : tuple of float, optional
+        Map region. Needed for some projections.
+
+    Returns
+    -------
+    callable
+        A function that projects plot coordinates into GMT map coordinates
+    """
+    # Matches a single projection code 'M', 'X', and then the extents x or y.
+    match = re.match(r"([A-Za-z])([\d./]*)", gmt_proj)
+    if not match:
+        raise ValueError(f"Cannot parse GMT projection: {gmt_proj}")
+
+    code, _ = match.groups()
+
+    # TODO: Support more projections
+    if code.upper() == "M":
+        # Mercator
+        if region is not None:
+            lon0 = (region[0] + region[1]) / 2
+        else:
+            lon0 = 0
+        return Proj(proj="merc", lon_0=lon0)
+
+    elif code.upper() == "X":
+        # Cartesian projection gets a dummy identity function
+        return lambda x, y: (x, y)
+    else:
+        raise NotImplementedError(f"GMT projection {code} not supported")
+
+
+def label_polygon_at(
+    fig: pygmt.Figure,
+    t: float,
+    polygon: shapely.Polygon,
+    label: str,
+    align: bool = False,
+    projection: str | None = None,
+    **kwargs,
+) -> None:
+    """Label a polygon on a pygmt figure.
+
+    Will label the boundary of the polygon with the given label. The
+    point chosen on the boundary is the point farthest from the region
+    boundaries.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        Figure to plot on.
+    t : float
+        Parameter representing point on polygon in the range [0, 1].
+        Proceeds counter-clockwise around polygon starting from the
+        first vertex of the exterior.
+    polygon : shapely.Polygon
+        Polygon to label.
+    label : str
+        Label to add.
+    align : bool, optional
+        If True, align the angle of the label with the polygon.
+    projection : str or None, optional
+        If provided, use the projection to calculate alignment angle.
+    **kwargs
+        Additional arguments to pass to `pygmt.Figure.text`.
+    """
+    point = polygon.exterior.interpolate(t, normalized=True)
+
+    angle = None
+    if align and projection:
+        match _segment_at_point_on_polygon(t, polygon):
+            case (p1, p2):
+                # NOTE: we need to project into map coordinates to
+                # correctly compute the slope of the adjacent segment.
+                # At some point pygmt will support mapproject, and we
+                # can use that instead of _gmt_to_pyproj.
+                proj = _gmt_to_pyproj(projection, kwargs.get("region", fig.region))
+                x1, y1 = proj(p1.x, p1.y)
+                x2, y2 = proj(p2.x, p2.y)
+                dx = x2 - x1
+                dy = y2 - y1
+                angle = np.degrees(np.arctan2(dy, dx))
+                if angle > 90:
+                    angle -= 180
+                elif angle < -90:
+                    angle += 180
+
+    fig.text(text=label, x=point.x, y=point.y, angle=angle, **kwargs)
+
+
+def label_polygon_on_boundary(
+    fig: pygmt.Figure,
+    polygon: shapely.Polygon,
+    label: str,
+    align: bool = False,
+    projection: str | None = None,
+    **kwargs,
+) -> None:
+    """Label a polygon on a pygmt figure.
+
+    Will label the boundary of the polygon with the given label. The
+    point chosen on the boundary is the point farthest from the region
+    boundaries.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        Figure to plot on.
+    polygon : shapely.Polygon
+        Polygon to label.
+    label : str
+        Label to add.
+    align : bool, optional
+        If True, align the angle of the label with the polygon.
+    projection : str or None, optional
+        If provided, use the projection to calculate alignment angle.
+    **kwargs
+        Additional arguments to pass to `pygmt.Figure.text`.
+    """
+    region = fig.region
+    region_polygon = shapely.box(region[0], region[2], region[1], region[3])
+    t, _ = _hausdorff_maximisation(polygon, region_polygon)
+    label_polygon_at(fig, t, polygon, label, align, projection, **kwargs)
+
+
+def label_geometry_inside(
+    fig: pygmt.Figure, geometry: shapely.Geometry, label: str, **kwargs
+) -> None:
+    """Label a geometry on a pygmt figure.
+
+    Will label inside the geometry with the given label. The point
+    chosen is determined by `shapely.point_on_surface`. Note that the
+    geometry need not be a polygon.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        Figure to plot on.
+    geometry : shapely.Geometry
+        Geometry to label.
+    label : str
+        Label to add.
+    **kwargs
+        Additional arguments to pass to `pygmt.Figure.text`.
+    """
+    point = shapely.point_on_surface(geometry)
+    fig.text(x=point.x, y=point.y, text=label, **kwargs)
+
+
+def plot_geometry(
+    fig: pygmt.Figure,
+    geometry: shapely.Geometry,
+    crs: str | None = None,
+    **kwargs,
+) -> None:
+    """Plot a geometry on a pygmt figure.
+
+    Parameters
+    ----------
+    fig : pygmt.Figure
+        Figure to plot on.
+    geometry : shapely.Geometry
+        Geometry to plot.
+    crs : str or None
+        The CRS of the geometry, if applicable.
+    **kwargs
+        Additional arguments to pass to `pygmt.Figure.plot`.
+
+    Examples
+    --------
+    >>> import pygmt
+    >>> import shapely.geometry
+    >>> fig = pygmt.Figure()
+    >>> polygon = shapely.geometry.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    >>> plot_geometry(fig, polygon, pen="1p,blue,-")
+    """
+    gdf = geopandas.GeoDataFrame(geometry=[geometry], crs=crs)
+    fig.plot(gdf, **kwargs)
+
+
+def grid_scale_for_region(region: tuple[float, float, float, float]) -> int:
+    """Compute a suitable grid scale for a pygmt region.
+
+    Parameters
+    ----------
+    region : tuple[float, float, float, float]
+        The pygmt region you will plot a grid in.
+
+    Returns
+    -------
+    int
+        A value (in metres) represent for `plotting.create_grid` to
+        use when plotting the lat-lon grid. Scale is based on the
+        maximum extent in the lat or lon direction for the figure in
+        kilometres. Works out that 10km = 25m, 100km = 250m, with a
+        minimum resolution of 5m.
+    """
+    min_lon, max_lon, min_lat, max_lat = region
+    lat_km = (max_lat - min_lat) * 111
+    lon_km = (max_lon - min_lon) * 111 * np.cos(np.radians((min_lat + max_lat) / 2))
+    maximum_extent = max(lat_km, lon_km)
+    return int(round(max(5, 2.5 * maximum_extent)))
+
+
+def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArray:
+    """Clip a grid to mask points outside `geometry`.
+
+    Parameters
+    ----------
+    geometry : shapely.Geometry
+        The geometry to clip the grid to.
+    grid : xr.DataArray
+        The gridded data. Usually created from `create_grid`.
+
+    Returns
+    -------
+    xr.DataArray
+        A new data array with contents of grid inside the geometry and NaN outside the geometry.
+    """
+    lon, lat = np.meshgrid(grid.longitude.values, grid.latitude.values)
+
+    mask = shapely.contains_xy(geometry, lon.ravel(), lat.ravel()).reshape(lon.shape)
+    return grid.where(mask)
