@@ -536,8 +536,8 @@ def plot_grid(
 
         # Add a colorbar, with an annotated tick every second colour step,
         # and un-annotated tick with every other colour step
-        phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"+{cmap_limits[1]}"
-        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}", f"f+{cmap_limits[2]}"]
+        phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
+        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}"f"f+{cmap_limits[2]}"]
         if cb_label is not None:
             if encode_cb_label:
                 cb_label = cb_label.replace(" ", r"\040")
