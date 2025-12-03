@@ -417,6 +417,8 @@ def disagg_plot(
         A tuple defining the region for the plot in the format
         (min_distance, max_distance, min_magnitude, max_magnitude).
         This defines the x and y axes of the plot.
+    plot_type : DisaggPlotType
+        The type of disaggregation plot to create.
     category_key : str
         The column name in `disagg_df` that specifies the category type,
         e.g. epsilon or tectonic type.
