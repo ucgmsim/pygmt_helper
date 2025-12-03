@@ -466,7 +466,7 @@ def plot_grid(
         as is.
         Only needed for older versions of pygmt, 
         this was fixed in pygmt v0.6.0 [1]_.
-    cb_position : string, optional
+    cb_position : str, optional
         The position string of the color bar on the figure. 
         See ``position`` argument in [2]_ for details.
     cb_box : str, optional

@@ -3,7 +3,7 @@
 import io
 import multiprocessing as mp
 from collections.abc import Sequence
-from enum import StrEnum, auto
+from enum import StrEnum
 from importlib import reload
 from pathlib import Path
 from typing import Optional, Any
@@ -16,8 +16,10 @@ from tqdm import tqdm
 
 from . import plotting
 
+
 class DisaggPlotType(StrEnum):
     """Enum for disaggregation plot types."""
+
     TectonicType = "tectonic_type"
     Epsilon = "epsilon"
 
@@ -393,7 +395,7 @@ def disagg_plot(
     category_specs: dict,
     output_ffp: Path | None = None,
     plot_kwargs: dict | None = None,
-    config_options: dict[str, Any] = None,
+    config_options: dict[str, Any] | None = None,
     verbose: bool = True,
 ) -> None:
     """
@@ -484,18 +486,17 @@ def disagg_plot(
         "width_factor": 0.8,
         "zsize": "5c",
         "perspective": [150, 35],
-        "dist_major_tick": 50,      
-        "dist_minor_tick": 25,      
-        "mag_major_tick": 0.5,      
-        "mag_minor_tick": 0.25,     
+        "dist_major_tick": 50,
+        "dist_minor_tick": 25,
+        "mag_major_tick": 0.5,
+        "mag_minor_tick": 0.25,
     }
     plot_kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
 
-    config_options = {
+    DEFAULT_CONFIG_OPTIONS = {
         "MAP_GRID_PEN_PRIMARY": "0.5p,black,-",
     }
-    if config_options:
-        pygmt.config(**config_options)
+    config_options = DEFAULT_CONFIG_OPTIONS | (config_options or {})
 
     # Create the figure
     region = [
@@ -520,7 +521,9 @@ def disagg_plot(
     )
 
     # Iterate over mag/dist groups
-    for cur_key, cur_group in tqdm(disagg_bin_groups, desc="Plotting disagg bins", disable=not verbose):
+    for cur_key, cur_group in tqdm(
+        disagg_bin_groups, desc="Plotting disagg bins", disable=not verbose
+    ):
         # Iterate over the category types
         cur_base = 0
         for _, cur_row in cur_group.iterrows():
@@ -560,6 +563,5 @@ def disagg_plot(
 
     if output_ffp:
         fig.savefig(output_ffp, dpi=900, anti_alias=True)
-    else: 
+    else:
         return fig
-        

@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pygmt_helper"
 version = "22.8.1"
-authors = [{name = "QuakeCoRE"}]
+authors = [{name = "ucgmsim"}]
 description = "PyGMT helper package"
 readme = "ReadMe.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
