@@ -433,9 +433,6 @@ def disagg_plot(
         in `disagg_df[category_key]`.
     output_ffp : Path
         The file path where the plot will be saved.
-    config_options : dict, optional
-        Configuration options to apply to the figure. See the GMT configuration
-        documentation [1]_ for available options.
     plot_kwargs : dict, optional
         Additional keyword arguments for the plot.
         Default values are used if not provided.
@@ -454,6 +451,9 @@ def disagg_plot(
             Default is 0.5.
         - 'mag_minor_tick': Minor tick interval for the magnitude axis.
             Default is 0.25.
+    config_options : dict, optional
+        Configuration options to apply to the figure. See the GMT configuration
+        documentation [1]_ for available options.
     verbose : bool, default=True
         If `True`, prints progress messages during plotting.
 
