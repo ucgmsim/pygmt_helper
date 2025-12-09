@@ -7,7 +7,7 @@ pyproj
 xarray
 scipy
 shapely
-qcore @ git+https://github.com/ucgmsim/qcore.git
+qcore-utils @ git+https://github.com/ucgmsim/qcore.git
 pytest
 pytest-cov
 pooch
