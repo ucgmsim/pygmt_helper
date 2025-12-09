@@ -3,13 +3,14 @@ requires = ["setuptools","setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pygmt_helper"
-version = "22.8.1"
+name = "pygmt-helper"
 authors = [{name = "ucgmsim"}]
 description = "PyGMT helper package"
 readme = "ReadMe.md"
 requires-python = ">=3.11,<3.14"
-dynamic = ["dependencies"]
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools_scm]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
