@@ -461,13 +461,13 @@ def plot_grid(
         If True, encodes the color bar label to replace spaces with
         `\040` for proper formatting in GMT. If False, uses the label
         as is.
-        Only needed for older versions of pygmt, 
+        Only needed for older versions of pygmt,
         this was fixed in pygmt v0.6.0 [1]_.
     cb_position : str, optional
-        The position string of the color bar on the figure. 
+        The position string of the color bar on the figure.
         See ``position`` argument in [2]_ for details.
     cb_box : str, optional
-        String to define the color bar box, 
+        String to define the color bar box,
         see ``box`` argument in [2]_ for details.
 
     Returns
@@ -534,17 +534,12 @@ def plot_grid(
         # Add a colorbar, with an annotated tick every second colour step,
         # and un-annotated tick with every other colour step
         phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
-        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}"f"f+{cmap_limits[2]}"]
+        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}f+{cmap_limits[2]}"]
         if cb_label is not None:
             if encode_cb_label:
                 cb_label = cb_label.replace(" ", r"\040")
             cb_frame.append(f"x+l{cb_label}")
-        fig.colorbar(
-            cmap=cpt_ffp,
-            position=cb_position,
-            frame=cb_frame,
-            box=cb_box
-        )
+        fig.colorbar(cmap=cpt_ffp, position=cb_position, frame=cb_frame, box=cb_box)
 
 
 def create_grid(
