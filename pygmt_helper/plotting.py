@@ -1205,11 +1205,13 @@ def clip(
         tmp_dir = Path(tmp_dir_name)
         paths = [tmp_dir / f"geom_{i}.txt" for i in range(len(clipping_geometries))]
         for path, geometry in zip(paths, clipping_geometries):
-            path.write_text("\n".join(f"{x} {y}" for x, y in geometry.exterior.coords))
+            path.write_text(
+                "\n".join(f"{x:.8f} {y:.8f}" for x, y in geometry.exterior.coords)
+            )
 
-        # Activate clipping for each geometry
+        # Activate clipping for each geometry (clips to the interior of polygons)
         for path in paths:
-            s.call_module("clip", f"{path} -N")
+            s.call_module("clip", str(path))
 
         try:
             yield
