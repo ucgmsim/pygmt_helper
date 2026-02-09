@@ -4,8 +4,9 @@ import copy
 import itertools
 import re
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, NamedTuple, Optional, Self
+from typing import Any, Callable, Generator, NamedTuple, Optional, Self, Sequence
 
 import geopandas
 import numpy as np
@@ -15,6 +16,7 @@ import pygmt
 import scipy as sp
 import shapely
 import xarray as xr
+from pygmt.clib import Session
 from pyproj import Proj
 from qcore import coordinates, point_in_polygon
 from scipy import interpolate
@@ -1156,3 +1158,66 @@ def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArra
 
     mask = shapely.contains_xy(geometry, lon.ravel(), lat.ravel()).reshape(lon.shape)
     return grid.where(mask)
+
+
+@contextmanager
+def clip(
+    clipping_geometries: Sequence[shapely.Polygon],
+) -> Generator[None, None, None]:
+    """Context manager to enable GMT clipping for one or more polygons.
+
+    This context manager sets up GMT clipping paths based on the provided
+    polygon geometries. All plotting commands executed within the context
+    will be clipped to the interior of these polygons. Clipping is
+    automatically disabled when exiting the context.
+
+    Parameters
+    ----------
+    clipping_geometries : Sequence[shapely.Polygon]
+        A sequence of Shapely Polygon objects defining the clipping regions.
+        Only the exterior boundary of each polygon is used for clipping.
+
+    Yields
+    ------
+    None
+        Control is yielded to allow plotting operations within the
+        clipping region.
+
+    Examples
+    --------
+    >>> import shapely
+    >>> import pygmt
+    >>> from pygmt_helper.plotting import clip
+    >>> # Create a simple polygon
+    >>> polygon = shapely.Polygon([(0, 0), (5, 0), (5, 5), (0, 5)])
+    >>> fig = pygmt.Figure()
+    >>> fig.basemap(region=[-1, 6, -1, 6], projection="X10c", frame=True)
+    >>> with clip([polygon]):
+    ...     # Plotting commands here will be clipped to the polygon
+    ...     fig.plot(x=[2.5], y=[2.5], style="c0.5c", fill="red")
+
+    Notes
+    -----
+    This function uses GMT's clip functionality through the PyGMT Session
+    interface. The clipping is achieved by:
+
+    1. Writing polygon coordinates to temporary files
+    2. Activating GMT clipping with these polygon paths
+    3. Yielding control for user plotting operations
+    4. Deactivating clipping upon context exit
+    """
+    with Session() as s, tempfile.TemporaryDirectory() as tmp_dir_name:
+        tmp_dir = Path(tmp_dir_name)
+        paths = [tmp_dir / f"geom_{i}.txt" for i in range(len(clipping_geometries))]
+        for path, geometry in zip(paths, clipping_geometries):
+            path.write_text("\n".join(f"{x} {y}" for x, y in geometry.exterior.coords))
+
+        # Activate clipping for each geometry
+        for path in paths:
+            s.call_module("clip", f"{path} -N")
+
+        try:
+            yield
+        finally:
+            # Deactivate clipping
+            s.call_module("clip", "-C")
