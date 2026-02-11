@@ -4,9 +4,10 @@ import copy
 import itertools
 import re
 import tempfile
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Generator, NamedTuple, Optional, Self, Sequence
+from typing import Any, Generator, NamedTuple, Optional, Self
 
 import geopandas
 import numpy as np
@@ -1159,12 +1160,12 @@ def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArra
 def clip(
     clipping_geometries: Sequence[shapely.Polygon],
 ) -> Generator[None, None, None]:
-    """Context manager to enable GMT clipping for one or more polygons.
+    """Clip drawing with polygons to cut out parts of a GMT plot.
 
-    This context manager sets up GMT clipping paths based on the provided
-    polygon geometries. All plotting commands executed within the context
-    will be clipped to the interior of these polygons. Clipping is
-    automatically disabled when exiting the context.
+    This function is intended to be used within a context manager, a
+    ``with`` statement. All plotting commands executed within the
+    context of this function will be clipped to the interior of the
+    polygons in ``clipping_geometries``.
 
     Parameters
     ----------
@@ -1190,20 +1191,11 @@ def clip(
     >>> with clip([polygon]):
     ...     # Plotting commands here will be clipped to the polygon
     ...     fig.plot(x=[2.5], y=[2.5], style="c0.5c", fill="red")
-
-    Notes
-    -----
-    This function uses GMT's clip functionality through the PyGMT Session
-    interface. The clipping is achieved by:
-
-    1. Writing polygon coordinates to temporary files
-    2. Activating GMT clipping with these polygon paths
-    3. Yielding control for user plotting operations
-    4. Deactivating clipping upon context exit
     """
     with Session() as s, tempfile.TemporaryDirectory() as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
         paths = [tmp_dir / f"geom_{i}.txt" for i in range(len(clipping_geometries))]
+
         for path, geometry in zip(paths, clipping_geometries):
             path.write_text("\n".join(f"{x} {y}" for x, y in geometry.exterior.coords))
 
