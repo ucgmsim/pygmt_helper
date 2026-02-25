@@ -4,8 +4,10 @@ import copy
 import itertools
 import re
 import tempfile
+from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, NamedTuple, Optional, Self
+from typing import Any, Generator, NamedTuple, Optional, Self
 
 import geopandas
 import numpy as np
@@ -15,6 +17,7 @@ import pygmt
 import scipy as sp
 import shapely
 import xarray as xr
+from pygmt.clib import Session
 from pyproj import Proj
 from qcore import coordinates, point_in_polygon
 from scipy import interpolate
@@ -459,13 +462,13 @@ def plot_grid(
         If True, encodes the color bar label to replace spaces with
         `\040` for proper formatting in GMT. If False, uses the label
         as is.
-        Only needed for older versions of pygmt, 
+        Only needed for older versions of pygmt,
         this was fixed in pygmt v0.6.0 [1]_.
     cb_position : str, optional
-        The position string of the color bar on the figure. 
+        The position string of the color bar on the figure.
         See ``position`` argument in [2]_ for details.
     cb_box : str, optional
-        String to define the color bar box, 
+        String to define the color bar box,
         see ``box`` argument in [2]_ for details.
 
     Returns
@@ -532,17 +535,12 @@ def plot_grid(
         # Add a colorbar, with an annotated tick every second colour step,
         # and un-annotated tick with every other colour step
         phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
-        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}"f"f+{cmap_limits[2]}"]
+        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}f+{cmap_limits[2]}"]
         if cb_label is not None:
             if encode_cb_label:
                 cb_label = cb_label.replace(" ", r"\040")
             cb_frame.append(f"x+l{cb_label}")
-        fig.colorbar(
-            cmap=cpt_ffp,
-            position=cb_position,
-            frame=cb_frame,
-            box=cb_box
-        )
+        fig.colorbar(cmap=cpt_ffp, position=cb_position, frame=cb_frame, box=cb_box)
 
 
 def create_grid(
@@ -1156,3 +1154,56 @@ def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArra
 
     mask = shapely.contains_xy(geometry, lon.ravel(), lat.ravel()).reshape(lon.shape)
     return grid.where(mask)
+
+
+@contextmanager
+def clip(
+    clipping_geometries: Sequence[shapely.Polygon],
+) -> Generator[None, None, None]:
+    """Clip drawing with polygons to cut out parts of a GMT plot.
+
+    This function is intended to be used within a context manager, a
+    ``with`` statement. All plotting commands executed within the
+    context of this function will be clipped to the interior of the
+    polygons in ``clipping_geometries``.
+
+    Parameters
+    ----------
+    clipping_geometries : Sequence[shapely.Polygon]
+        A sequence of Shapely Polygon objects defining the clipping regions.
+        Only the exterior boundary of each polygon is used for clipping.
+
+    Yields
+    ------
+    None
+        Control is yielded to allow plotting operations within the
+        clipping region.
+
+    Examples
+    --------
+    >>> import shapely
+    >>> import pygmt
+    >>> from pygmt_helper.plotting import clip
+    >>> # Create a simple polygon
+    >>> polygon = shapely.Polygon([(0, 0), (5, 0), (5, 5), (0, 5)])
+    >>> fig = pygmt.Figure()
+    >>> fig.basemap(region=[-1, 6, -1, 6], projection="X10c", frame=True)
+    >>> with clip([polygon]):
+    ...     # Plotting commands here will be clipped to the polygon
+    ...     fig.plot(x=[2.5], y=[2.5], style="c0.5c", fill="red")
+    """
+    with Session() as s, tempfile.TemporaryDirectory() as tmp_dir_name:
+        tmp_dir = Path(tmp_dir_name)
+        paths = [tmp_dir / f"geom_{i}.txt" for i in range(len(clipping_geometries))]
+
+        for path, geometry in zip(paths, clipping_geometries):
+            path.write_text("\n".join(f"{x} {y}" for x, y in geometry.exterior.coords))
+
+        # Activate clipping for all geometries (clips to the interior of polygons)
+        s.call_module("clip", [str(path) for path in paths])
+
+        try:
+            yield
+        finally:
+            # Deactivate clipping
+            s.call_module("clip", ["-C"])
