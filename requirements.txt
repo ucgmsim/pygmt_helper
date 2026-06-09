@@ -2,7 +2,7 @@ numpy
 pandas
 geopandas>1.0
 pyarrow
-pygmt
+pygmt>=0.18.0
 pyproj
 xarray
 scipy
