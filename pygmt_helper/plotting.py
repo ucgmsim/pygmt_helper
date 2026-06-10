@@ -609,7 +609,7 @@ def create_grid(
         land_mask = pygmt.grdlandmask(
             region=region if region else "NZ",
             spacing=grid_spacing,
-            maskvalues=[0, 1, 1, 1, 1],
+            mask_values=[0, 1, 1, 1, 1],
             resolution="f",
         )
 
