@@ -316,7 +316,7 @@ def gen_region_fig(
     if title:
         fig.basemap(frame=title_args)
 
-    # Plot coastline
+    # Plot background land
     fig.plot(
         data=map_data.coastline_df,
         pen=f"{plot_kwargs['coastline_pen_width']}p,{plot_kwargs['coastline_pen_color']}",
@@ -386,6 +386,12 @@ def gen_region_fig(
 
     # Plot inland water
     fig.plot(data=map_data.water_df, fill=plot_kwargs["water_color"])
+
+    # Plot coastline
+    fig.plot(
+        data=map_data.coastline_df,
+        pen=f"{plot_kwargs['coastline_pen_width']}p,{plot_kwargs['coastline_pen_color']}",
+    )
 
     # Add roads
     if plot_roads:
@@ -459,13 +465,13 @@ def plot_grid(
         If True, encodes the color bar label to replace spaces with
         `\040` for proper formatting in GMT. If False, uses the label
         as is.
-        Only needed for older versions of pygmt, 
+        Only needed for older versions of pygmt,
         this was fixed in pygmt v0.6.0 [1]_.
     cb_position : str, optional
-        The position string of the color bar on the figure. 
+        The position string of the color bar on the figure.
         See ``position`` argument in [2]_ for details.
     cb_box : str, optional
-        String to define the color bar box, 
+        String to define the color bar box,
         see ``box`` argument in [2]_ for details.
 
     Returns
@@ -532,17 +538,12 @@ def plot_grid(
         # Add a colorbar, with an annotated tick every second colour step,
         # and un-annotated tick with every other colour step
         phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
-        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}"f"f+{cmap_limits[2]}"]
+        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}f+{cmap_limits[2]}"]
         if cb_label is not None:
             if encode_cb_label:
                 cb_label = cb_label.replace(" ", r"\040")
             cb_frame.append(f"x+l{cb_label}")
-        fig.colorbar(
-            cmap=cpt_ffp,
-            position=cb_position,
-            frame=cb_frame,
-            box=cb_box
-        )
+        fig.colorbar(cmap=cpt_ffp, position=cb_position, frame=cb_frame, box=cb_box)
 
 
 def create_grid(
@@ -574,7 +575,8 @@ def create_grid(
         (min_lon, max_lon, min_lat, max_lat).
         If None, then create NZ-wide grid.
     interp_method : str
-        The interpolation method to apply between points in `data_df`. Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
+        The interpolation method to apply between points in `data_df`. 
+        Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
     set_water_to_nan : bool
         If True, set water values in the grid to NaN.
     high_quality : bool, optional
@@ -651,7 +653,15 @@ def create_grid(
 
     # Change water values to nan
     if set_water_to_nan:
-        grid.values[~land_mask.astype(bool)] = np.nan
+        coast_mask, water_mask = get_coast_water_mask(
+            NZMapData.load(region=region),
+            np.stack((x2.flatten(), x1.flatten()), axis=1),
+        )
+
+        coast_mask = coast_mask.reshape(land_mask.shape)
+        water_mask = water_mask.reshape(land_mask.shape)
+
+        grid.values[~coast_mask | water_mask] = np.nan
 
     return grid
 
@@ -743,6 +753,59 @@ def on_land(
     return mask
 
 
+def get_coast_water_mask(
+    map_data: NZMapData,
+    points: np.ndarray,
+):
+    """
+    Returns two boolean masks indicating whether the given points are offshore, 
+    in onshore water, or on land, based on the `map_data` coastline and water polygons.
+
+    Parameters
+    ----------
+    map_data : NZMapData
+        The map data containing coastline and water polygons.
+    points : np.ndarray
+        An array of points with shape (n_points, 2) where each row is [lat, lon].
+
+    Returns
+    -------
+    coast_mask: np.ndarray
+        A boolean array of the same length as `points`, where True indicates
+        that the point is on onshore and False indicates that it is offshore.
+    water_mask: np.ndarray
+        A boolean array of the same length as `points`, where True indicates
+        that the point is in onshore water (lakes, rivers) and False
+        indicates that it is not.
+    """
+    coastline_df = map_data.coastline_df.to_crs("EPSG:2193")
+    coastline_df["geometry"] = coastline_df.geometry.apply(
+        lambda geom: shapely.Polygon(geom.coords)
+    )
+
+    water_df = map_data.water_df.to_crs("EPSG:2193")
+    water_df["geometry"] = water_df.geometry.apply(
+        lambda geom: shapely.Polygon(geom.coords)
+    )
+
+    points_nztm = coordinates.wgs_depth_to_nztm(points)[:, ::-1]
+
+    coast_polygon = shapely.coverage_union_all(coastline_df.geometry)
+    shapely.prepare(coast_polygon)
+    water_polygon = shapely.coverage_union_all(water_df.geometry)
+    shapely.prepare(water_polygon)
+
+    coast_mask = shapely.contains_xy(
+        coast_polygon, points_nztm[:, 0], points_nztm[:, 1]
+    )
+
+    water_mask = shapely.contains_xy(
+        water_polygon, points_nztm[:, 0], points_nztm[:, 1]
+    )
+
+    return coast_mask, water_mask
+
+
 def get_landmask(
     map_data: NZMapData,
     region: tuple[float, float, float, float],
@@ -769,6 +832,8 @@ def get_landmask(
         A land mask grid where land points are set to 1
         and water points are set to NaN.
     """
+    
+
     # Create a land mask grid for the specified region and grid spacing.
     land_mask = pygmt.grdlandmask(region=region, spacing=grid_spacing)
     land_mask[:] = 1

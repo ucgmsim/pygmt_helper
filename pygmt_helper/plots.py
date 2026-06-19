@@ -135,7 +135,6 @@ def faults_plot(
     rupture_df: pd.DataFrame,
     fault_data: Sequence[nhm.NHMFault],
     region: str | tuple[float, float, float, float] = (164.8, 179.4, -47.5, -36.0),
-    map_data: Optional[plotting.NZMapData] = None,
     title: str = "Faults",
     show_hypo: bool = False,
     highlight_faults: Optional[Sequence[str]] = None,
@@ -172,7 +171,6 @@ def faults_plot(
     fig = plotting.gen_region_fig(
         title,
         region,
-        map_data=map_data,
         plot_topo=True,
         plot_roads=False,
         plot_highways=True,
