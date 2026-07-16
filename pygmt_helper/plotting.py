@@ -486,9 +486,13 @@ def plot_grid(
         tmp_dir = Path(tmp_dir)
 
         # Set the background & foreground colour for the colormap
-        pygmt.config(
-            COLOR_BACKGROUND=cmap_limit_colors[1], COLOR_FOREGROUND=cmap_limit_colors[0]
-        )
+        # When reverse_cmap is True, the cmap is reversed so the limit colours
+        # must be swapped to stay correct for values below/above the range.
+        if reverse_cmap:
+            bg_color, fg_color = cmap_limit_colors[1], cmap_limit_colors[0]
+        else:
+            bg_color, fg_color = cmap_limit_colors[0], cmap_limit_colors[1]
+        pygmt.config(COLOR_BACKGROUND=bg_color, COLOR_FOREGROUND=fg_color)
 
         # Need two CPTs, otherwise the contours will be plotted every cb_step
         # And using "interval" directly in the contour call means that they don't
