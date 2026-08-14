@@ -3,6 +3,7 @@
 import copy
 import itertools
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Optional, Self
@@ -15,7 +16,7 @@ import pygmt
 import scipy as sp
 import shapely
 import xarray as xr
-from pyproj import Proj
+from pyproj import Geod, Proj
 from qcore import coordinates, point_in_polygon
 from scipy import interpolate
 
@@ -94,6 +95,198 @@ GMT_DATA = pooch.create(
     },
 )
 
+DEFAULT_PROJECTION = "M17.0c"
+
+
+class ProjectedRegion:
+    """A map frame: the area to draw, and the projection to draw it in.
+
+    Everything GMT needs to set up a map, in the forms its different
+    consumers need it:
+
+    - ``str(region)`` — the ``-R`` argument.
+    - ``region.projection`` — the ``-J`` argument.
+    - ``region.bounding_box`` — the plain ``(west, east, south, north)``
+      lon/lat tuple, for anything numeric (data clipping, grid extents) and
+      for ``pygmt.grdlandmask``, which has no ``-J`` and so can only ever
+      take a real lon/lat box.
+
+    For a rotated region the first and last are *different geography*:
+    `str()` is the exact tilted rectangle that gets plotted, while
+    `bounding_box` is the axis-aligned lon/lat box that contains it.
+
+    The projection is held here rather than passed alongside because the two
+    are not independent: a rotated region's ``+r`` corners are only
+    meaningful under the projection they were computed against.
+
+    Build one with `from_box` (rectangular projections),
+    `from_rotated_corners` (oblique projections) or `from_gmt_region` (GMT's
+    named regions, e.g. "NZ"); `__init__` is internal.
+
+    Deliberately not iterable or indexable, so it cannot be mistaken for a
+    plain region tuple. This also means pygmt's argument builder
+    (``pygmt.helpers.utils.is_nonstr_iter``, which checks
+    ``isinstance(value, collections.abc.Iterable)``) treats it as an opaque
+    scalar and calls `str()` on it, so passing one straight to a pygmt
+    function as ``region=`` produces the correct ``-R``.
+    """
+
+    def __init__(
+        self,
+        bounding_box: tuple[float, float, float, float] | None,
+        projection: str,
+        corners: tuple[float, float, float, float] | None = None,
+        gmt_region: str | None = None,
+    ):
+        """Internal — use `from_box`, `from_rotated_corners` or
+        `from_gmt_region`.
+
+        Parameters
+        ----------
+        bounding_box : tuple of float or None
+            (west, east, south, north) in lon/lat. None only for a named GMT
+            region, whose extent is opaque to us.
+        projection : str
+            The GMT ``-J`` argument. Always set.
+        corners : tuple of float, optional
+            (lon1, lat1, lon2, lat2), the lower-left and upper-right corners
+            *as measured in `projection`'s rotated space*, for the GMT `+r`
+            form. Set only for rotated regions.
+        gmt_region : str, optional
+            A GMT named region (e.g. "NZ"), used verbatim as ``-R``.
+        """
+        self.bounding_box = bounding_box
+        self.projection = projection
+        self.corners = corners
+        self.gmt_region = gmt_region
+
+    def __str__(self):
+        """The GMT `-R` argument for this region."""
+        if self.gmt_region is not None:
+            return self.gmt_region
+        if self.corners is not None:
+            return "{}/{}/{}/{}+r".format(*self.corners)
+        return "{}/{}/{}/{}".format(*self.bounding_box)
+
+    def __repr__(self):
+        return f"{type(self).__name__}(-R{self} -J{self.projection})"
+
+    @classmethod
+    def from_box(
+        cls,
+        west: float,
+        east: float,
+        south: float,
+        north: float,
+        projection: str = DEFAULT_PROJECTION,
+    ) -> Self:
+        """A plain lon/lat box, for rectangular projections (Mercator, etc).
+
+        Not suitable for oblique projections (Oa/Ob/Oc), which read a plain
+        `west/east/south/north` region as raw *oblique degrees* rather than
+        lon/lat — use `from_rotated_corners` for those.
+        """
+        return cls((west, east, south, north), projection)
+
+    @classmethod
+    def from_gmt_region(
+        cls, gmt_region: str, projection: str = DEFAULT_PROJECTION
+    ) -> Self:
+        """One of GMT's named regions (e.g. "NZ"), used verbatim as ``-R``.
+
+        `bounding_box` is None, since the name is opaque to us — callers
+        needing real bounds should treat that as "the whole default area".
+        """
+        return cls(None, projection, gmt_region=gmt_region)
+
+    @classmethod
+    def from_rotated_corners(
+        cls,
+        lon1: float,
+        lat1: float,
+        lon2: float,
+        lat2: float,
+        azimuth: float,
+        width: str,
+    ) -> Self:
+        """A rectangle tilted to `azimuth`, for oblique projections.
+
+        `(lon1, lat1)` and `(lon2, lat2)` are two opposite corners of the
+        rectangle you want to plot, and `azimuth` is the angle (degrees
+        clockwise from north) its long axis runs at. `width` is the *figure*
+        width on the page (e.g. "18c") — not a ground distance; the figure
+        height follows from the rectangle's aspect ratio.
+
+        Oblique projections (Oa/Ob/Oc) read a plain `west/east/south/north`
+        region as raw *oblique degrees* rather than lon/lat, so they need the
+        `+r` corner-rectangle form to be given real geographic coordinates.
+
+        The corners may be given in either order, but must be the diagonal of
+        the rectangle you actually want: a lon/lat box's two diagonals span
+        *different* rectangles once rotated.
+
+        They are re-derived into the pair `+r` actually requires: lower-left
+        then upper-right **as measured in the rotated space**. This matters —
+        a lon/lat SW/NE pair frequently projects onto the *anti*-diagonal
+        (upper-left / lower-right) under rotation, and GMT then computes a
+        negative map height rather than normalising.
+
+        `bounding_box` is the lon/lat min/max over all four of the
+        rectangle's corners, so it covers the whole tilted rectangle, not
+        just the two given corners.
+        """
+        centre_lon, centre_lat = Geod(ellps="WGS84").npts(lon1, lat1, lon2, lat2, 1)[0]
+        projection = f"Oa{centre_lon}/{centre_lat}/{azimuth}/{width}"
+
+        plain_region = (
+            f"{min(lon1, lon2)}/{max(lon1, lon2)}/{min(lat1, lat2)}/{max(lat1, lat2)}"
+        )
+        (x1, y1), (x2, y2) = _gmt_mapproject(
+            [(lon1, lat1), (lon2, lat2)], plain_region, projection
+        )
+        xlo, xhi = min(x1, x2), max(x1, x2)
+        ylo, yhi = min(y1, y2), max(y1, y2)
+        # Lower-left and upper-right first (what `+r` needs), then the other
+        # two corners, which the plain lon/lat box has to cover as well.
+        (ll, ur, *rest) = _gmt_mapproject(
+            [(xlo, ylo), (xhi, yhi), (xlo, yhi), (xhi, ylo)],
+            plain_region,
+            projection,
+            inverse=True,
+        )
+        lons, lats = zip(ll, ur, *rest)
+
+        return cls(
+            bounding_box=(min(lons), max(lons), min(lats), max(lats)),
+            projection=projection,
+            corners=(*ll, *ur),
+        )
+
+
+def _gmt_mapproject(
+    points: list[tuple[float, float]],
+    plain_region: str,
+    projection: str,
+    inverse: bool = False,
+) -> list[tuple[float, float]]:
+    """Forward- or inverse-project points via the `gmt mapproject` CLI (`-Dc`,
+    i.e. plot-space units in cm). `plain_region` is a plain (non `+r`)
+    "west/east/south/north" string — required by GMT but, unlike for
+    basemap/grdlandmask, doesn't get reinterpreted as raw oblique degrees
+    here, since mapproject treats stdin points as real lon/lat regardless.
+    """
+    cmd = ["gmt", "mapproject", f"-R{plain_region}", f"-J{projection}", "-Dc"]
+    if inverse:
+        cmd.append("-I")
+    result = subprocess.run(
+        cmd,
+        input="\n".join(f"{a} {b}" for a, b in points),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [(float(a), float(b)) for a, b in (line.split() for line in result.stdout.splitlines())]
+
 
 class NZMapData(NamedTuple):
     """New Zealand map data configuration."""
@@ -108,7 +301,7 @@ class NZMapData(NamedTuple):
     @classmethod
     def load(
         cls,
-        region: tuple[float, float, float, float] = None,
+        bounds: tuple[float, float, float, float] | None = None,
         high_res_topo: bool = False,
     ) -> Self:
         """Load NZMapData.
@@ -116,9 +309,13 @@ class NZMapData(NamedTuple):
         Parameters
         ----------
         region : tuple of float, optional
-            The region to load the map data for.
+            The lon/lat bounds to load the map data for, as
+            (min_lon, max_lon, min_lat, max_lat).
             If None, loads the full NZ map data.
             Currently only applied to the topography data.
+            Callers holding a `ProjectedRegion` should pass its
+            `bounding_box` - the data is sliced on lon/lat, so a projection
+            is meaningless here.
         high_res_topo : bool, optional
             If True, load high resolution topographic data.
 
@@ -140,20 +337,20 @@ class NZMapData(NamedTuple):
             topo_shading_ffp = GMT_DATA.fetch("data/Topo/srtm_NZ_i5.grd")
 
         topo_grid = xr.open_dataset(topo_ffp)["z"]
-        if region:
+        if bounds:
             topo_grid = topo_grid.sel(
-                lon=slice(region[0], region[1]),
-                lat=slice(region[2], region[3]),
+                lon=slice(bounds[0], bounds[1]),
+                lat=slice(bounds[2], bounds[3]),
             )
 
         topo_shading = xr.open_dataset(topo_shading_ffp)["z"]
-        if region:
+        if bounds:
             topo_shading = topo_shading.sel(
-                lon=slice(region[0], region[1]),
-                lat=slice(region[2], region[3]),
+                lon=slice(bounds[0], bounds[1]),
+                lat=slice(bounds[2], bounds[3]),
             )
 
-        bbox = (region[0], region[2], region[1], region[3]) if region else None
+        bbox = (bounds[0], bounds[2], bounds[1], bounds[3]) if bounds else None
         return cls(
             road_df=geopandas.read_parquet(road_ffp, bbox=bbox).set_crs("EPSG:4326"),
             highway_df=geopandas.read_parquet(highway_ffp, bbox=bbox).set_crs(
@@ -186,11 +383,9 @@ DEFAULT_PLT_KWARGS = dict(
     frame_args=["af", "xaf+lLongitude", "yaf+lLatitude"],
 )
 
-
 def gen_region_fig(
     title: Optional[str] = None,
-    region: tuple[float, float, float, float] | None = None,
-    projection: str = "M17.0c",
+    region: ProjectedRegion | None = None,
     plot_roads: bool = False,
     plot_highways: bool = True,
     plot_topo: bool = True,
@@ -212,12 +407,12 @@ def gen_region_fig(
     ----------
     title : str, optional
         Title of the figure.
-    region : tuple of float, optional
-        The region to plot, defined as a tuple of four floats
-        (min_lon, max_lon, min_lat, max_lat).
-        If None, then creates a NZ-wide map.
-    projection : str
-        The map projection string. See the PyGMT documentation [0]_ for details.
+    region : ProjectedRegion, optional
+        The area to plot and the projection to plot it in. Build one with
+        `ProjectedRegion.from_box` (rectangular projections),
+        `ProjectedRegion.from_rotated_corners` (oblique projections) or
+        `ProjectedRegion.from_gmt_region` (GMT named regions).
+        If None, creates a NZ-wide map using `DEFAULT_PROJECTION`.
     plot_roads : bool, optional, default=True
         If True, plot roads on the map.
     plot_highways : bool, optional, default=True
@@ -287,8 +482,13 @@ def gen_region_fig(
     .. [0] https://www.pygmt.org/latest/projections/index.html#projections
     .. [1] https://docs.generic-mapping-tools.org/latest/gmt.conf.html
     """
+    if region is None:
+        region = ProjectedRegion.from_gmt_region("NZ")
+
     # Load NZ map data
-    map_data = NZMapData.load(region=region, high_res_topo=high_res_topo and plot_topo)
+    map_data = NZMapData.load(
+        region=region.bounding_box, high_res_topo=high_res_topo and plot_topo
+    )
 
     # Merge with default
     plot_kwargs = copy.deepcopy(DEFAULT_PLT_KWARGS) | (plot_kwargs or {})
@@ -302,8 +502,8 @@ def gen_region_fig(
     water_color = plot_kwargs["water_color"]
     plot_kwargs["frame_args"] = plot_kwargs.get("frame_args", []) + [f"+g{water_color}"]
     fig.basemap(
-        region=region if region else "NZ",
-        projection=projection,
+        region=region,
+        projection=region.projection,
         frame=plot_kwargs["frame_args"],
     )
 
@@ -327,7 +527,7 @@ def gen_region_fig(
     if plot_topo:
         # Drop topo points not on land based on
         # the coastline and water data.
-        if high_quality and region:
+        if high_quality and region.bounding_box:
             topo_points = np.array(
                 list(
                     itertools.product(
@@ -335,9 +535,9 @@ def gen_region_fig(
                     )
                 )
             )
-            topo_land_mask = on_land(map_data, topo_points, region=region).reshape(
-                map_data.topo_grid.shape
-            )
+            topo_land_mask = on_land(
+                map_data, topo_points, bounds=region.bounding_box
+            ).reshape(map_data.topo_grid.shape)
             topo_grid = map_data.topo_grid.where(topo_land_mask, np.nan)
             topo_shading_grid = map_data.topo_shading_grid.where(topo_land_mask, np.nan)
 
@@ -550,7 +750,7 @@ def create_grid(
     data_df: pd.DataFrame,
     data_key: str,
     grid_spacing: str | None = None,
-    region: tuple[float, float, float, float] | None = None,
+    bounds: tuple[float, float, float, float] | None = None,
     interp_method: str = "linear",
     set_water_to_nan: bool = True,
     high_quality: bool = False,
@@ -570,8 +770,8 @@ def create_grid(
         See the spacing parameter of `pygmt.grdlandmask` or the Notes
         section. If none, will use a grid-scale inferred from the
         region.
-    region : tuple of float, optional
-        The region to generate grid for, defined as a tuple of four floats
+    bounds : tuple of float, optional
+        The lon/lat bounds to generate the grid for, as
         (min_lon, max_lon, min_lat, max_lat).
         If None, then create NZ-wide grid.
     interp_method : str
@@ -596,22 +796,22 @@ def create_grid(
     - To define a fixed number of gridlines: `"{x}+n/{x}+n"`,
       where `x` is the number of gridlines.
     """
-    if region is not None and not grid_spacing:
-        grid_scale = grid_scale_for_region(region)
+    if bounds is not None and not grid_spacing:
+        grid_scale = grid_scale_for_region(bounds)
         grid_spacing = f"{grid_scale}e/{grid_scale}e"
     elif not grid_spacing:
         grid_spacing = "200e/200e"
 
     # Create the land/water mask
-    if high_quality and region is not None:
+    if high_quality and bounds is not None:
         land_mask = get_landmask(
-            NZMapData.load(region=region),
-            region,
+            NZMapData.load(region=bounds),
+            bounds,
             grid_spacing=grid_spacing,
         )
     else:
         land_mask = pygmt.grdlandmask(
-            region=region if region else "NZ",
+            region=bounds if bounds else "NZ",
             spacing=grid_spacing,
             maskvalues=[0, 1, 1, 1, 1],
             resolution="f",
@@ -654,7 +854,7 @@ def create_grid(
     # Change water values to nan
     if set_water_to_nan:
         coast_mask, water_mask = get_coast_water_mask(
-            NZMapData.load(region=region),
+            NZMapData.load(bounds=bounds),
             np.stack((x2.flatten(), x1.flatten()), axis=1),
         )
 
@@ -691,7 +891,7 @@ def in_region(region: tuple[float, float, float, float], points: np.ndarray):
 def on_land(
     map_data: NZMapData,
     points: np.ndarray,
-    region: tuple[float, float, float, float] | None = None,
+    bounds: tuple[float, float, float, float] | None = None,
 ):
     """
     Checks if the given points are on land based on the
@@ -704,7 +904,7 @@ def on_land(
     points : np.ndarray
         An array of points with shape (n_points, 2) where each row is [lat, lon].
     region : tuple of (float, float, float, float), optional
-        The region of interest, providing this will
+        The lat/lon bounds of interest, providing this will
         significantly speed up the check.
         If None, checks all points against the
         full NZ coastline and water polygons (slow).
@@ -726,16 +926,16 @@ def on_land(
     ]
 
     # Filter by region
-    if region is not None:
+    if bounds is not None:
         coast_polygon_arrays = [
             cur_poly_coords
             for cur_poly_coords in coast_polygon_arrays
-            if np.any(in_region(region, cur_poly_coords))
+            if np.any(in_region(bounds, cur_poly_coords))
         ]
         water_polygon_arrays = [
             cur_poly_coords
             for cur_poly_coords in water_polygon_arrays
-            if np.any(in_region(region, cur_poly_coords))
+            if np.any(in_region(bounds, cur_poly_coords))
         ]
 
     mask = np.zeros(points.shape[0], dtype=bool)
@@ -808,7 +1008,7 @@ def get_coast_water_mask(
 
 def get_landmask(
     map_data: NZMapData,
-    region: tuple[float, float, float, float],
+    bounds: tuple[float, float, float, float],
     grid_spacing: str = "25e/25e",
 ):
     """
@@ -819,8 +1019,8 @@ def get_landmask(
     ----------
     map_data : NZMapData
         The map data containing coastline and water polygons.
-    region : tuple of (float, float, float, float)
-        The region to create the land mask for, defined as
+    bounds : tuple of (float, float, float, float)
+        The lat/lon bounds to create the land mask for, defined as
         (min_lon, max_lon, min_lat, max_lat).
     grid_spacing : str, optional
         The grid spacing for the land mask.
@@ -832,17 +1032,14 @@ def get_landmask(
         A land mask grid where land points are set to 1
         and water points are set to NaN.
     """
-    
-
-    # Create a land mask grid for the specified region and grid spacing.
-    land_mask = pygmt.grdlandmask(region=region, spacing=grid_spacing)
+    land_mask = pygmt.grdlandmask(region=bounds, spacing=grid_spacing)
     land_mask[:] = 1
 
     # Get grid lat/lon values
     grid_points = np.array(
         list(itertools.product(land_mask.lat.values, land_mask.lon.values))
     )
-    grid_points_mask = on_land(map_data, grid_points, region=region)
+    grid_points_mask = on_land(map_data, grid_points, bounds=bounds)
     land_mask[:] = grid_points_mask.reshape(land_mask.shape)
 
     return land_mask

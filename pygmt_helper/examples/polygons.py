@@ -7,10 +7,9 @@ region = (170, 175, -45, -40)
 projection = "M10c"
 
 fig = plotting.gen_region_fig(
-    region=region,
+    region=plotting.ProjectedRegion.from_box(*region, projection),
     title="Test Map",
     subtitle="Test Subtitle",
-    projection=projection,
     config_options={"MAP_FRAME_PEN": "2p"},
 )
 

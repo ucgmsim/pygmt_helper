@@ -60,7 +60,7 @@ event_df = event_df.loc[event_df.mag > min_mag]
 
 # Generate the figure
 fig = plotting.gen_region_fig(
-    region=(min_lon, max_lon, min_lat, max_lat),
+    region=plotting.ProjectedRegion.from_box(min_lon, max_lon, min_lat, max_lat),
     high_res_topo=use_high_res_topo,
     config_options=dict(
         MAP_FRAME_TYPE="plain",
@@ -128,7 +128,7 @@ with fig.inset(
     box="+p0.5p,black",
 ):
     fig = plotting.gen_region_fig(
-        region=inset_region,
+        region=plotting.ProjectedRegion.from_box(*inset_region, "M4c"),
         high_res_topo=use_high_res_topo,
         high_quality=True,
         fig=fig

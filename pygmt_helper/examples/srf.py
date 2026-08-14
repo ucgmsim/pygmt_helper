@@ -32,7 +32,7 @@ region = (
     corners[:, 1, :].min() - 0.25,
     corners[:, 1, :].max() + 0.25,
 )
-fig = plotting.gen_region_fig("Title", region=region)
+fig = plotting.gen_region_fig("Title", plotting.ProjectedRegion.from_box(*region))
 
 # Process each fault plane
 for ix, (cur_plane, cur_slip) in enumerate(zip(planes, slip_values)):
@@ -47,7 +47,7 @@ for ix, (cur_plane, cur_slip) in enumerate(zip(planes, slip_values)):
         cur_df,
         "slip",
         grid_spacing="5e/5e",
-        region=(cur_xmin, cur_xmax, cur_ymin, cur_ymax),
+        bounds=(cur_xmin, cur_xmax, cur_ymin, cur_ymax),
         set_water_to_nan=False,
     )
 

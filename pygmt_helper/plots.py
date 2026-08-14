@@ -32,7 +32,7 @@ def im_plot(
     fault_trace: Optional[np.ndarray] = None,
     cb_limits: Optional[tuple[float, float]] = None,
     nz_map_data: Optional[plotting.NZMapData] = None,
-    region: Optional[str | tuple[float, float, float, float]] = None,
+    region: Optional[tuple[float, float, float, float]] = None,
 ) -> pygmt.Figure:
     """
     Creates a single intensity measure (IM) plot figure for a given rupture.
@@ -83,18 +83,16 @@ def im_plot(
 
     fig = plotting.gen_region_fig(
         rupture_name,
-        region,
-        projection="M17.0c",
-        plot_roads=True if nz_map_data is not None else False,
-        plot_topo=True if nz_map_data is not None else False,
-        map_data=nz_map_data,
+        plotting.ProjectedRegion.from_box(*region, "M17.0c"),
+        plot_roads=True,
+        plot_topo=True,
     )
 
     # Apply exponential
     cur_df = data_df[["lon", "lat"]].copy()
     cur_df[im] = np.exp(data_df[im].values)
 
-    grid = plotting.create_grid(cur_df, im, region=region)
+    grid = plotting.create_grid(cur_df, im, bounds=region)
 
     # Colormap/bar limits
     if cb_limits is None:
@@ -134,7 +132,7 @@ def im_plot(
 def faults_plot(
     rupture_df: pd.DataFrame,
     fault_data: Sequence[nhm.NHMFault],
-    region: str | tuple[float, float, float, float] = (164.8, 179.4, -47.5, -36.0),
+    region: tuple[float, float, float, float] = (164.8, 179.4, -47.5, -36.0),
     title: str = "Faults",
     show_hypo: bool = False,
     highlight_faults: Optional[Sequence[str]] = None,
@@ -170,7 +168,7 @@ def faults_plot(
     """
     fig = plotting.gen_region_fig(
         title,
-        region,
+        plotting.ProjectedRegion.from_box(*region),
         plot_topo=True,
         plot_roads=False,
         plot_highways=True,
