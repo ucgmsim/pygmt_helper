@@ -208,6 +208,7 @@ class ProjectedRegion:
         lat2: float,
         azimuth: float,
         width: str,
+        vertical: bool = False,
     ) -> Self:
         """A rectangle tilted to `azimuth`, for oblique projections.
 
@@ -216,6 +217,24 @@ class ProjectedRegion:
         clockwise from north) its long axis runs at. `width` is the *figure*
         width on the page (e.g. "18c") — not a ground distance; the figure
         height follows from the rectangle's aspect ratio.
+
+        `vertical` gives a portrait figure — the region's long axis running up
+        the page rather than across it — by turning the projection 90°, so the
+        rectangle stands upright in the ordinary frame.
+
+        It deliberately does *not* use GMT's ``+v`` modifier, which nominally
+        does the same thing. ``+v`` renders this region **south-up**, and GMT
+        offers no way to flip it: ``azimuth + 180`` and reversed ``Ob`` anchor
+        points both normalise to a byte-identical map, because an oblique
+        equator is a line and a line has no direction. Turning the azimuth
+        instead produces the same figure (to within 0.5%) the right way up.
+        ``+v`` also needs the ``+r`` corners computed in the *unflipped* frame
+        or GMT reports a negative map height, so it buys nothing but traps.
+
+        Note `width` still sets the *x* extent, so the portrait form of the
+        same region is taller, not narrower — a 1:3 rectangle at
+        ``width="18c"`` is 54cm tall; pass a smaller width (e.g. "6c") for a
+        page-sized portrait map. `bounding_box` is unaffected by `vertical`.
 
         Oblique projections (Oa/Ob/Oc) read a plain `west/east/south/north`
         region as raw *oblique degrees* rather than lon/lat, so they need the
@@ -236,6 +255,8 @@ class ProjectedRegion:
         just the two given corners.
         """
         centre_lon, centre_lat = Geod(ellps="WGS84").npts(lon1, lat1, lon2, lat2, 1)[0]
+        if vertical:
+            azimuth += 90
         projection = f"Oa{centre_lon}/{centre_lat}/{azimuth}/{width}"
 
         plain_region = (
@@ -487,7 +508,7 @@ def gen_region_fig(
 
     # Load NZ map data
     map_data = NZMapData.load(
-        region=region.bounding_box, high_res_topo=high_res_topo and plot_topo
+        bounds=region.bounding_box, high_res_topo=high_res_topo and plot_topo
     )
 
     # Merge with default

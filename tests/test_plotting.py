@@ -8,6 +8,7 @@ import xarray as xr
 from pygmt_helper.plotting import (
     DEFAULT_PROJECTION,
     ProjectedRegion,
+    _gmt_mapproject,
     create_grid,
     gen_region_fig,
     plot_grid,
@@ -165,6 +166,36 @@ def test_region_from_rotated_corners_builds_projection_about_centre():
         *NZ_CORNERS, azimuth=20, width="18c"
     )
     assert _map_dimensions(shallower)[1] > _map_dimensions(region)[1]
+
+
+AUCKLAND = (174.7655, -36.8503)
+INVERCARGILL = (168.3538, -46.4132)
+
+
+def test_region_from_rotated_corners_vertical_is_portrait_and_north_up():
+    """`vertical` turns the projection 90 degrees rather than using GMT's
+    `+v`, which renders this region south-up with no way to flip it."""
+    landscape = ProjectedRegion.from_rotated_corners(
+        *NZ_CORNERS, azimuth=34, width="6c"
+    )
+    portrait = ProjectedRegion.from_rotated_corners(
+        *NZ_CORNERS, azimuth=34, width="6c", vertical=True
+    )
+
+    assert "+v" not in portrait.projection
+    assert portrait.projection.split("/")[2] == "124"
+
+    # Portrait: taller than wide, and the reverse of the landscape aspect.
+    p_width, p_height = _map_dimensions(portrait)
+    l_width, l_height = _map_dimensions(landscape)
+    assert p_height > p_width
+    assert p_height / p_width == pytest.approx(l_width / l_height, rel=0.01)
+
+    # North must be up - Auckland above Invercargill on the plotted page.
+    (_, auckland_y), (_, invercargill_y) = _gmt_mapproject(
+        [AUCKLAND, INVERCARGILL], str(portrait), portrait.projection
+    )
+    assert auckland_y > invercargill_y
 
 
 def test_region_from_box():
