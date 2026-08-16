@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from qcore import nhm
 
-from pygmt_helper import plots, plotting
+from pygmt_helper import plots
 
 # Config
 nhm_ffp = Path("path to nhm file")

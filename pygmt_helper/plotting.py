@@ -4,10 +4,10 @@ import copy
 import itertools
 import re
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Generator, NamedTuple, Optional, Self
+from typing import Any, NamedTuple, Self
 
 import geopandas
 import numpy as np
@@ -19,8 +19,9 @@ import shapely
 import xarray as xr
 from pygmt.clib import Session
 from pyproj import Proj
-from qcore import coordinates, point_in_polygon
 from scipy import interpolate
+
+from qcore import coordinates, point_in_polygon
 
 GMT_DATA = pooch.create(
     pooch.os_cache("pygmt_helper"),
@@ -101,17 +102,17 @@ GMT_DATA = pooch.create(
 class NZMapData(NamedTuple):
     """New Zealand map data configuration."""
 
-    road_df: pd.DataFrame = None
-    highway_df: geopandas.GeoDataFrame = None
-    coastline_df: geopandas.GeoDataFrame = None
-    water_df: geopandas.GeoDataFrame = None
-    topo_grid: xr.DataArray = None
-    topo_shading_grid: xr.DataArray = None
+    road_df: pd.DataFrame
+    highway_df: geopandas.GeoDataFrame
+    coastline_df: geopandas.GeoDataFrame
+    water_df: geopandas.GeoDataFrame
+    topo_grid: xr.DataArray
+    topo_shading_grid: xr.DataArray
 
     @classmethod
     def load(
         cls,
-        region: tuple[float, float, float, float] = None,
+        region: tuple[float, float, float, float] | None = None,
         high_res_topo: bool = False,
     ) -> Self:
         """Load NZMapData.
@@ -171,36 +172,36 @@ class NZMapData(NamedTuple):
         )
 
 
-DEFAULT_PLT_KWARGS = dict(
-    water_color="lightblue",
-    land_color="lightgray",
-    road_pen_width=0.01,
-    road_pen_color="white",
-    highway_pen_width=0.5,
-    highway_pen_color="yellow",
-    coastline_pen_width=0.05,
-    coastline_pen_color="black",
-    topo_cmap="gray",
-    topo_cmap_min=-3000,
-    topo_cmap_max=3000,
-    topo_cmap_inc=10,
-    topo_cmap_continous=False,
-    topo_cmap_reverse=True,
-    frame_args=["af", "xaf+lLongitude", "yaf+lLatitude"],
-)
+DEFAULT_PLT_KWARGS: dict[str, Any] = {
+    "water_color": "lightblue",
+    "land_color": "lightgray",
+    "road_pen_width": 0.01,
+    "road_pen_color": "white",
+    "highway_pen_width": 0.5,
+    "highway_pen_color": "yellow",
+    "coastline_pen_width": 0.05,
+    "coastline_pen_color": "black",
+    "topo_cmap": "gray",
+    "topo_cmap_min": -3000,
+    "topo_cmap_max": 3000,
+    "topo_cmap_inc": 10,
+    "topo_cmap_continous": False,
+    "topo_cmap_reverse": True,
+    "frame_args": ["af", "xaf+lLongitude", "yaf+lLatitude"],
+}
 
 
 def gen_region_fig(
-    title: Optional[str] = None,
+    title: str | None = None,
     region: tuple[float, float, float, float] | None = None,
     projection: str = "M17.0c",
     plot_roads: bool = False,
     plot_highways: bool = True,
     plot_topo: bool = True,
     high_res_topo: bool = False,
-    plot_kwargs: dict[str, Any] = None,
-    config_options: dict[str, Any] = None,
-    subtitle: Optional[str] = None,
+    plot_kwargs: dict[str, Any] | None = None,
+    config_options: dict[str, Any] | None = None,
+    subtitle: str | None = None,
     fig: pygmt.Figure | None = None,
     high_quality: bool = False,
     custom_shading_fn: (
@@ -582,7 +583,7 @@ def create_grid(
         (min_lon, max_lon, min_lat, max_lat).
         If None, then create NZ-wide grid.
     interp_method : str
-        The interpolation method to apply between points in `data_df`. 
+        The interpolation method to apply between points in `data_df`.
         Must be one of `"CloughTorcher"`, `"nearest"` or `"linear"`.
     set_water_to_nan : bool
         If True, set water values in the grid to NaN.
@@ -765,7 +766,7 @@ def get_coast_water_mask(
     points: np.ndarray,
 ):
     """
-    Returns two boolean masks indicating whether the given points are offshore, 
+    Returns two boolean masks indicating whether the given points are offshore,
     in onshore water, or on land, based on the `map_data` coastline and water polygons.
 
     Parameters
@@ -839,7 +840,6 @@ def get_landmask(
         A land mask grid where land points are set to 1
         and water points are set to NaN.
     """
-    
 
     # Create a land mask grid for the specified region and grid spacing.
     land_mask = pygmt.grdlandmask(region=region, spacing=grid_spacing)
@@ -1206,7 +1206,7 @@ def grid_scale_for_region(region: tuple[float, float, float, float]) -> int:
     lat_km = (max_lat - min_lat) * 111
     lon_km = (max_lon - min_lon) * 111 * np.cos(np.radians((min_lat + max_lat) / 2))
     maximum_extent = max(lat_km, lon_km)
-    return int(round(max(5, 2.5 * maximum_extent)))
+    return round(max(5, 2.5 * maximum_extent))
 
 
 def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArray:

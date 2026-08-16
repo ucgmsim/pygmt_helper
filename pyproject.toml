@@ -27,12 +27,18 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
-dev = ["ruff", "deptry"]
+dev = ["ruff", "deptry", "ty"]
 
 [tool.setuptools_scm]
 
 [tool.deptry]
 optional_dependencies_dev_groups = ["test", "dev"]
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["pyarrow", "netcdf4"]
+
+[tool.ty.src]
+exclude = ["pygmt_helper/examples/"]
 
 [tool.ruff]
 extend-exclude = ['pygmt_helper/examples/']
