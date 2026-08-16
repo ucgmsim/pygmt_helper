@@ -537,7 +537,7 @@ def plot_grid(
         if plot_contours:
             fig.grdcontour(
                 annotation="-",
-                interval=cpt_ffp_ct,
+                levels=cpt_ffp_ct,
                 grid=grid,
                 limit=[cmap_limits[0], cmap_limits[1]],
                 pen="0.1p",

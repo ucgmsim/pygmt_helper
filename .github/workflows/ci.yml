@@ -10,5 +10,4 @@ jobs:
       system-packages: "gmt libgmt-dev ghostscript"
       uv-extra-args: "--all-extras"
       numpydoc-extra-excludes: "-E examples"
-      enable-coverage: true
-      cov-package: pygmt_helper
+      enable-coverage: false

@@ -14,7 +14,7 @@ dependencies = [
   "pandas",
   "geopandas>1.0",
   "pyarrow",
-  "pygmt",
+  "pygmt>=0.16.0",
   "pyproj",
   "xarray",
   "scipy",
@@ -28,6 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
 dev = ["ruff", "deptry", "ty"]
+examples = ["source-modelling"]
 
 [tool.setuptools_scm]
 
