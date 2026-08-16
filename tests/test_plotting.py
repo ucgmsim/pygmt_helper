@@ -1,9 +1,11 @@
 import pandas as pd
 import pygmt
 import pytest
+import shapely
 import xarray as xr
 
 from pygmt_helper.plotting import (
+    clip,
     create_grid,
     gen_region_fig,
     plot_grid,
@@ -102,3 +104,14 @@ def test_plot_grid(data_df: pd.DataFrame):
         plot_contours=False,
     )
     assert isinstance(fig, pygmt.Figure)
+
+
+def test_clip():
+    """Test that the clip context manager doesn't crash with a simple polygon."""
+    # Create a simple rectangular polygon
+    polygon = shapely.Polygon([(170, -45), (175, -45), (175, -40), (170, -40)])
+
+    # Test that the context manager can be entered and exited without errors
+    with clip([polygon]):
+        # If we reach here without exception, the basic functionality works
+        pass

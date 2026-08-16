@@ -4,8 +4,10 @@ import copy
 import itertools
 import re
 import tempfile
+from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, NamedTuple, Optional, Self
+from typing import Any, Generator, NamedTuple, Optional, Self
 
 import geopandas
 import numpy as np
@@ -15,6 +17,7 @@ import pygmt
 import scipy as sp
 import shapely
 import xarray as xr
+from pygmt.clib import Session
 from pyproj import Proj
 from qcore import coordinates, point_in_polygon
 from scipy import interpolate
@@ -489,9 +492,13 @@ def plot_grid(
         tmp_dir = Path(tmp_dir)
 
         # Set the background & foreground colour for the colormap
-        pygmt.config(
-            COLOR_BACKGROUND=cmap_limit_colors[1], COLOR_FOREGROUND=cmap_limit_colors[0]
-        )
+        # When reverse_cmap is True, the cmap is reversed so the limit colours
+        # must be swapped to stay correct for values below/above the range.
+        if reverse_cmap:
+            bg_color, fg_color = cmap_limit_colors[1], cmap_limit_colors[0]
+        else:
+            bg_color, fg_color = cmap_limit_colors[0], cmap_limit_colors[1]
+        pygmt.config(COLOR_BACKGROUND=bg_color, COLOR_FOREGROUND=fg_color)
 
         # Need two CPTs, otherwise the contours will be plotted every cb_step
         # And using "interval" directly in the contour call means that they don't
@@ -613,7 +620,7 @@ def create_grid(
         land_mask = pygmt.grdlandmask(
             region=region if region else "NZ",
             spacing=grid_spacing,
-            maskvalues=[0, 1, 1, 1, 1],
+            mask_values=[0, 1, 1, 1, 1],
             resolution="f",
         )
 
@@ -1221,3 +1228,56 @@ def clip_geometry(geometry: shapely.Geometry, grid: xr.DataArray) -> xr.DataArra
 
     mask = shapely.contains_xy(geometry, lon.ravel(), lat.ravel()).reshape(lon.shape)
     return grid.where(mask)
+
+
+@contextmanager
+def clip(
+    clipping_geometries: Sequence[shapely.Polygon],
+) -> Generator[None, None, None]:
+    """Clip drawing with polygons to cut out parts of a GMT plot.
+
+    This function is intended to be used within a context manager, a
+    ``with`` statement. All plotting commands executed within the
+    context of this function will be clipped to the interior of the
+    polygons in ``clipping_geometries``.
+
+    Parameters
+    ----------
+    clipping_geometries : Sequence[shapely.Polygon]
+        A sequence of Shapely Polygon objects defining the clipping regions.
+        Only the exterior boundary of each polygon is used for clipping.
+
+    Yields
+    ------
+    None
+        Control is yielded to allow plotting operations within the
+        clipping region.
+
+    Examples
+    --------
+    >>> import shapely
+    >>> import pygmt
+    >>> from pygmt_helper.plotting import clip
+    >>> # Create a simple polygon
+    >>> polygon = shapely.Polygon([(0, 0), (5, 0), (5, 5), (0, 5)])
+    >>> fig = pygmt.Figure()
+    >>> fig.basemap(region=[-1, 6, -1, 6], projection="X10c", frame=True)
+    >>> with clip([polygon]):
+    ...     # Plotting commands here will be clipped to the polygon
+    ...     fig.plot(x=[2.5], y=[2.5], style="c0.5c", fill="red")
+    """
+    with Session() as s, tempfile.TemporaryDirectory() as tmp_dir_name:
+        tmp_dir = Path(tmp_dir_name)
+        paths = [tmp_dir / f"geom_{i}.txt" for i in range(len(clipping_geometries))]
+
+        for path, geometry in zip(paths, clipping_geometries):
+            path.write_text("\n".join(f"{x} {y}" for x, y in geometry.exterior.coords))
+
+        # Activate clipping for all geometries (clips to the interior of polygons)
+        s.call_module("clip", [str(path) for path in paths])
+
+        try:
+            yield
+        finally:
+            # Deactivate clipping
+            s.call_module("clip", ["-C"])
