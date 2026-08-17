@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from qcore import nhm
 
-from pygmt_helper import plots, plotting
+from pygmt_helper import plots
 
 # Config
 nhm_ffp = Path("path to nhm file")
@@ -16,9 +16,6 @@ show_hypo = False
 
 # Load the NHM
 nhm_data = nhm.load_nhm(str(nhm_ffp))
-
-# Load plotting data
-map_data = plotting.NZMapData.load()
 
 # Load the source information
 cybershake_df = pd.read_csv(
@@ -41,7 +38,6 @@ rupture_df = pd.concat((cybershake_df, small_df), axis=0)
 fig = plots.faults_plot(
     rupture_df,
     [cur_fault for cur_name, cur_fault in nhm_data.items()],
-    map_data=map_data,
     title="Faults",
     show_hypo=show_hypo,
 )

@@ -1,0 +1,13 @@
+name: CI
+
+on: [pull_request]
+
+jobs:
+  ci:
+    uses: ucgmsim/meta-ci-action/.github/workflows/ci.yml@main
+    with:
+      package-dir: pygmt_helper
+      system-packages: "gmt libgmt-dev ghostscript"
+      uv-extra-args: "--all-extras"
+      numpydoc-extra-excludes: "-E examples"
+      enable-coverage: false

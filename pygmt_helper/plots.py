@@ -6,13 +6,14 @@ from collections.abc import Sequence
 from enum import StrEnum
 from importlib import reload
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pygmt
-from qcore import nhm
 from tqdm import tqdm
+
+from qcore import nhm
 
 from . import plotting
 
@@ -28,11 +29,12 @@ def im_plot(
     data_df: pd.DataFrame,
     im: str,
     rupture_name: str,
-    hypo_loc: Optional[tuple[float, float]] = None,
-    fault_trace: Optional[np.ndarray] = None,
-    cb_limits: Optional[tuple[float, float]] = None,
-    nz_map_data: Optional[plotting.NZMapData] = None,
-    region: Optional[str | tuple[float, float, float, float]] = None,
+    hypo_loc: tuple[float, float] | None = None,
+    fault_trace: np.ndarray | None = None,
+    cb_limits: tuple[float, float] | None = None,
+    plot_roads: bool = False,
+    plot_topo: bool = True,
+    region: tuple[float, float, float, float] | None = None,
 ) -> pygmt.Figure:
     """
     Creates a single intensity measure (IM) plot figure for a given rupture.
@@ -53,9 +55,11 @@ def im_plot(
     cb_limits : tuple[float, float], optional
         Colormap/bar limits as (min, max).
         These should be in IM-space (i.e., not logged).
-    nz_map_data : plotting.NZMapData, optional
-        Map data required for plotting roads and topography.
-    region : str or tuple[float, float, float, float], optional
+    plot_roads : bool, optional, default=False
+        If True, plot roads on the map.
+    plot_topo : bool, optional, default=True
+        If True, plot topography on the map.
+    region : tuple[float, float, float, float], optional
         The map region to plot. If `None`, it is inferred from `data_df`.
 
     Returns
@@ -67,7 +71,6 @@ def im_plot(
     -----
     - The function computes an interpolated grid of IM values and plots it.
     - The color map is automatically scaled unless `cb_limits` is provided.
-    - Roads and topography are plotted if `nz_map_data` is supplied.
     - The hypocenter and fault trace, if provided, are overlaid on the figure.
     """
     region = (
@@ -85,9 +88,8 @@ def im_plot(
         rupture_name,
         region,
         projection="M17.0c",
-        plot_roads=True if nz_map_data is not None else False,
-        plot_topo=True if nz_map_data is not None else False,
-        map_data=nz_map_data,
+        plot_roads=plot_roads,
+        plot_topo=plot_topo,
     )
 
     # Apply exponential
@@ -113,7 +115,7 @@ def im_plot(
         ("white", "black"),
         reverse_cmap=True,
         transparency=35,
-        cb_label=im.IM.from_im_name(im).pretty_im_name,
+        cb_label=im,
     )
 
     if fault_trace is not None:
@@ -134,11 +136,10 @@ def im_plot(
 def faults_plot(
     rupture_df: pd.DataFrame,
     fault_data: Sequence[nhm.NHMFault],
-    region: str | tuple[float, float, float, float] = (164.8, 179.4, -47.5, -36.0),
-    map_data: Optional[plotting.NZMapData] = None,
+    region: tuple[float, float, float, float] = (164.8, 179.4, -47.5, -36.0),
     title: str = "Faults",
     show_hypo: bool = False,
-    highlight_faults: Optional[Sequence[str]] = None,
+    highlight_faults: Sequence[str] | None = None,
 ) -> pygmt.Figure:
     """
     Creates a figure showing all fault traces and the hypocenters of historic events.
@@ -153,10 +154,8 @@ def faults_plot(
         - `mag` : Magnitude of the event (used for marker sizing).
     fault_data : Sequence[nhm.NHMFault]
         List of NHMFault objects representing fault traces.
-    region : str or tuple[float, float, float, float], default=(164.8, 179.4, -47.5, -36.0)
+    region : tuple[float, float, float, float], default=(164.8, 179.4, -47.5, -36.0)
         Geographic region for the plot. See `gen_region_fig` for details.
-    map_data : plotting.NZMapData, optional
-        Custom map data for roads and topography.
     title : str, default="Faults"
         Title of the plot.
     show_hypo : bool, default=False
@@ -172,7 +171,6 @@ def faults_plot(
     fig = plotting.gen_region_fig(
         title,
         region,
-        map_data=map_data,
         plot_topo=True,
         plot_roads=False,
         plot_highways=True,
@@ -220,10 +218,11 @@ def im_plots(
     fault: str,
     ims: Sequence[str] | str,
     output_dir: Path,
-    rel_name: Optional[str] = None,
-    nhm_ffp: Optional[Path] = None,
-    nz_map_data: Optional[plotting.NZMapData] = None,
-    cb_limits_dict: Optional[dict[str, tuple[float, float]]] = None,
+    rel_name: str | None = None,
+    nhm_ffp: Path | None = None,
+    plot_roads: bool = False,
+    plot_topo: bool = True,
+    cb_limits_dict: dict[str, tuple[float, float]] | None = None,
     n_procs: int = 1,
 ) -> None:
     """
@@ -243,8 +242,10 @@ def im_plots(
         If provided, the function will generate plots for a specific realization (run) identified by this name.
     nhm_ffp : Path, optional
         Path to the NHM file, which can provide fault trace information.
-    nz_map_data : Optional[NZMapData], default=None
-        The NZMapData object to supply topographic data.
+    plot_roads : bool, optional, default=False
+        If True, plot roads on the map.
+    plot_topo : bool, optional, default=True
+        If True, plot topography on the map.
     cb_limits_dict : dict, optional
         A dictionary specifying the color bar limits for each intensity measure (IM). If None, limits will be automatically computed.
     n_procs : int, optional
@@ -276,7 +277,8 @@ def im_plots(
                 fault_trace,
                 None if cb_limits_dict is None else cb_limits_dict[im],
                 cur_out_dir / f"{im.replace('.', 'p')}_{rel_name}.png",
-                nz_map_data=nz_map_data,
+                plot_roads=plot_roads,
+                plot_topo=plot_topo,
             )
         # Multiple realisations
         else:
@@ -303,7 +305,8 @@ def im_plots(
                         fault_trace,
                         cb_limits,
                         cur_out_dir / f"{im.replace('.', 'p')}_{cur_rel}.png",
-                        nz_map_data=nz_map_data,
+                        plot_roads=plot_roads,
+                        plot_topo=plot_topo,
                     )
             else:
                 with mp.Pool(n_procs) as p:
@@ -322,7 +325,8 @@ def im_plots(
                                 fault_trace,
                                 cb_limits,
                                 cur_out_dir / f"{im.replace('.', 'p')}_{cur_rel}.png",
-                                nz_map_data,
+                                plot_roads,
+                                plot_topo,
                                 True,
                             )
                             for cur_rel in np.unique(data_df.rel)
@@ -335,10 +339,11 @@ def __gen_im_map(
     im: str,
     rel_name: str,
     hypo_loc: tuple[float, float],
-    fault_trace: np.ndarray,
-    cb_limits: Optional[tuple[float, float]],
+    fault_trace: np.ndarray | None,
+    cb_limits: tuple[float, float] | None,
     out_ffp: Path,
-    nz_map_data: plotting.NZMapData = None,
+    plot_roads: bool = False,
+    plot_topo: bool = True,
     mp: bool = False,
 ):
     """
@@ -360,8 +365,10 @@ def __gen_im_map(
         Tuple of (min, max) values for the color bar limits. If None, the limits will be automatically determined.
     out_ffp : Path
         Path to the output file where the generated map will be saved.
-    nz_map_data : plotting.NZMapData, optional
-        Data for New Zealand map generation. If None, no map will be overlaid.
+    plot_roads : bool, optional, default=False
+        If True, plot roads on the map.
+    plot_topo : bool, optional, default=True
+        If True, plot topography on the map.
     mp : bool, optional
         If True, enables multiprocessing features.
 
@@ -381,7 +388,8 @@ def __gen_im_map(
         rel_name,
         cb_limits=cb_limits,
         fault_trace=fault_trace,
-        nz_map_data=nz_map_data,
+        plot_roads=plot_roads,
+        plot_topo=plot_topo,
         hypo_loc=hypo_loc,
     )
     fig.savefig(str(out_ffp), dpi=1200)
@@ -397,7 +405,7 @@ def disagg_plot(
     plot_kwargs: dict | None = None,
     config_options: dict[str, Any] | None = None,
     verbose: bool = True,
-) -> None:
+) -> pygmt.Figure | None:
     """
     Creates a 3D disaggregation plot.
 
@@ -484,7 +492,7 @@ def disagg_plot(
     z_major_ticks_interval = max_contribution / 5
     z_minor_ticks_interval = max_contribution / 10
 
-    DEFAULT_PLOT_KWARGS = {
+    default_plot_kwargs = {
         "width_factor": 0.8,
         "zsize": "5c",
         "perspective": [150, 35],
@@ -493,12 +501,12 @@ def disagg_plot(
         "mag_major_tick": 0.5,
         "mag_minor_tick": 0.25,
     }
-    plot_kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
+    plot_kwargs = default_plot_kwargs | (plot_kwargs or {})
 
-    DEFAULT_CONFIG_OPTIONS = {
+    default_config_options = {
         "MAP_GRID_PEN_PRIMARY": "0.5p,black,-",
     }
-    config_options = DEFAULT_CONFIG_OPTIONS | (config_options or {})
+    config_options = default_config_options | (config_options or {})
 
     # Create the figure
     region = [
