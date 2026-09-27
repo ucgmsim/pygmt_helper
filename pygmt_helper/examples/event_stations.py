@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from pygmt_helper import plotting
@@ -128,10 +127,7 @@ with fig.inset(
     box="+p0.5p,black",
 ):
     fig = plotting.gen_region_fig(
-        region=inset_region,
-        high_res_topo=use_high_res_topo,
-        high_quality=True,
-        fig=fig
+        region=inset_region, high_res_topo=use_high_res_topo, high_quality=True, fig=fig
     )
 
     # Plot the sites
