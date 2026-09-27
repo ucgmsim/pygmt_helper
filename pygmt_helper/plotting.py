@@ -427,6 +427,7 @@ def plot_grid(
     encode_cb_label: bool = True,
     cb_position: str | None = None,
     cb_box: str | None = None,
+    show_cb: bool = True
 ):
     """Plots a data grid as a color map with optional contours and a color bar.
 
@@ -477,6 +478,8 @@ def plot_grid(
     cb_box : str, optional
         String to define the color bar box,
         see ``box`` argument in [2]_ for details.
+    show_cb : bool, optional, default=True
+        If True, displays the color bar.
 
     Returns
     -------
@@ -542,16 +545,16 @@ def plot_grid(
                 limit=[cmap_limits[0], cmap_limits[1]],
                 pen="0.1p",
             )
-
-        # Add a colorbar, with an annotated tick every second colour step,
-        # and un-annotated tick with every other colour step
-        phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
-        cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}f+{cmap_limits[2]}"]
-        if cb_label is not None:
-            if encode_cb_label:
-                cb_label = cb_label.replace(" ", r"\040")
-            cb_frame.append(f"x+l{cb_label}")
-        fig.colorbar(cmap=cpt_ffp, position=cb_position, frame=cb_frame, box=cb_box)
+        if show_cb:
+            # Add a colorbar, with an annotated tick every second colour step,
+            # and un-annotated tick with every other colour step
+            phase = f"{cmap_limits[0]}" if cmap_limits[0] > 0 else f"{cmap_limits[1]}"
+            cb_frame = [f"a+{cmap_limits[2] * 2}+{phase}f+{cmap_limits[2]}"]
+            if cb_label is not None:
+                if encode_cb_label:
+                    cb_label = cb_label.replace(" ", r"\040")
+                cb_frame.append(f"x+l{cb_label}")
+            fig.colorbar(cmap=cpt_ffp, position=cb_position, frame=cb_frame, box=cb_box)
 
 
 def create_grid(
