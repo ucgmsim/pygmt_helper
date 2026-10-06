@@ -692,6 +692,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/de/ec/28a57266b753799a87b8bc79e7887ac6fd981b8c6d2978a0b7e7b6bd708c/pandas-3.0.5-cp313-cp313-win_arm64.whl", hash = "sha256:66266d3442a5e8b3c90274c2b8b230bee42dd1c286bc822cc2f9f2c7e12b883e", size = 9094790, upload-time = "2026-07-22T22:18:47.468Z" },
 ]
 
+[package.optional-dependencies]
+parquet = [
+    { name = "pyarrow" },
+]
+
 [[package]]
 name = "parse"
 version = "1.22.1"
@@ -826,18 +831,16 @@ name = "pygmt-helper"
 source = { editable = "." }
 dependencies = [
     { name = "geopandas" },
-    { name = "netcdf4" },
     { name = "numpy" },
-    { name = "pandas" },
+    { name = "pandas", extra = ["parquet"] },
     { name = "pooch" },
-    { name = "pyarrow" },
     { name = "pygmt" },
     { name = "pyproj" },
     { name = "qcore-utils" },
     { name = "scipy" },
     { name = "shapely" },
     { name = "tqdm" },
-    { name = "xarray" },
+    { name = "xarray", extra = ["io"] },
 ]
 
 [package.optional-dependencies]
@@ -858,12 +861,10 @@ test = [
 requires-dist = [
     { name = "deptry", marker = "extra == 'dev'" },
     { name = "geopandas", specifier = ">1.0" },
-    { name = "netcdf4" },
     { name = "numpy" },
-    { name = "pandas" },
+    { name = "pandas", extras = ["parquet"] },
     { name = "pooch" },
-    { name = "pyarrow" },
-    { name = "pygmt", specifier = ">=0.16.0" },
+    { name = "pygmt", specifier = ">=0.17.0" },
     { name = "pyproj" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'test'" },
@@ -874,7 +875,7 @@ requires-dist = [
     { name = "source-modelling", marker = "extra == 'examples'" },
     { name = "tqdm" },
     { name = "ty", marker = "extra == 'dev'" },
-    { name = "xarray" },
+    { name = "xarray", extras = ["io"] },
 ]
 provides-extras = ["test", "dev", "examples"]
 

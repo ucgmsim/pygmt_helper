@@ -427,7 +427,7 @@ def plot_grid(
     encode_cb_label: bool = True,
     cb_position: str | None = None,
     cb_box: str | None = None,
-    show_cb: bool = True
+    show_cb: bool = True,
 ):
     """Plots a data grid as a color map with optional contours and a color bar.
 
@@ -624,7 +624,7 @@ def create_grid(
         land_mask = pygmt.grdlandmask(
             region=region if region else "NZ",
             spacing=grid_spacing,
-            mask_values=[0, 1, 1, 1, 1],
+            maskvalues=[0, 1, 1, 1, 1],
             resolution="f",
         )
 

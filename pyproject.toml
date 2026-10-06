@@ -11,18 +11,16 @@ requires-python = ">=3.12,<3.14"
 dynamic = ["version"]
 dependencies = [
   "numpy",
-  "pandas",
+  "pandas[parquet]",
   "geopandas>1.0",
-  "pyarrow",
-  "pygmt>=0.16.0",
+  "pygmt>=0.17.0",
   "pyproj",
-  "xarray",
+  "xarray[io]",
   "scipy",
   "shapely>=2",
   "qcore-utils",
   "pooch",
   "tqdm",
-  "netcdf4",
 ]
 
 [project.optional-dependencies]
@@ -34,9 +32,6 @@ examples = ["source-modelling"]
 
 [tool.deptry]
 optional_dependencies_dev_groups = ["test", "dev"]
-
-[tool.deptry.per_rule_ignores]
-DEP002 = ["pyarrow", "netcdf4"]
 
 [tool.ty.src]
 exclude = ["pygmt_helper/examples/"]
